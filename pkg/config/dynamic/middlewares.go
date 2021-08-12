@@ -37,6 +37,7 @@ type Middleware struct {
 	PassTLSClientCert *PassTLSClientCert `json:"passTLSClientCert,omitempty" toml:"passTLSClientCert,omitempty" yaml:"passTLSClientCert,omitempty" export:"true"`
 	Retry             *Retry             `json:"retry,omitempty" toml:"retry,omitempty" yaml:"retry,omitempty" export:"true"`
 	ContentType       *ContentType       `json:"contentType,omitempty" toml:"contentType,omitempty" yaml:"contentType,omitempty" export:"true"`
+	Replicate         *Replicate         `json:"replicate,omitempty" toml:"replicate,omitempty" yaml:"replicate,omitempty" export:"true"`
 
 	Plugin map[string]PluginConf `json:"plugin,omitempty" toml:"plugin,omitempty" yaml:"plugin,omitempty" export:"true"`
 }
@@ -499,4 +500,12 @@ func (c *ClientTLS) CreateTLSConfig() (*tls.Config, error) {
 		InsecureSkipVerify: c.InsecureSkipVerify,
 		ClientAuth:         clientAuth,
 	}, nil
+}
+
+// +k8s:deepcopy-gen=true
+
+// Replicate holds the configuration of the Replicate middleware.
+type Replicate struct {
+	Topic   string   `json:"topic,omitempty" toml:"topic,omitempty" yaml:"topic,omitempty" export:"true"`
+	Brokers []string `json:"brokers,omitempty" toml:"brokers,omitempty" yaml:"brokers,omitempty" export:"true"`
 }
