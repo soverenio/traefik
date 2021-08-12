@@ -35,7 +35,7 @@ func TestNewKafkaPublisher(t *testing.T) {
 			name:    "Fails to connect broker",
 			topic:   "test-topic",
 			brokers: []string{"broker:1234"},
-			expMsg:  "cannot create Kafka producer",
+			expMsg:  "cannot create a Kafka producer",
 		},
 	}
 

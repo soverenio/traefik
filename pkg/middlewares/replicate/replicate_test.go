@@ -14,7 +14,7 @@ import (
 )
 
 func TestNewReplicate(t *testing.T) {
-	t.Run("Creates instance with valid params", func(t *testing.T) {
+	t.Run("Creates an instance with valid params", func(t *testing.T) {
 		next := http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {})
 		producer := MockProducer(func(event Event) error { return nil })
 		name := "test-replicate"
@@ -26,7 +26,7 @@ func TestNewReplicate(t *testing.T) {
 }
 
 func TestReplicate(t *testing.T) {
-	t.Run("Don't affect on request and response", func(t *testing.T) {
+	t.Run("The middleware doesn't affect on request and response", func(t *testing.T) {
 		URL := "/test"
 		method := http.MethodPost
 		expectedBody := `{"key": "value"}`
@@ -45,7 +45,7 @@ func TestReplicate(t *testing.T) {
 
 			bytes, err := ioutil.ReadAll(body)
 			require.NoError(t, err)
-			assert.Equal(t, expectedBody, string(bytes), "request body was changed by middleware")
+			assert.Equal(t, expectedBody, string(bytes), "request body was changed by the middleware")
 
 			w.Header().Set(expectedHeader, expectedValue)
 			_, err = w.Write([]byte(expectedBody))
@@ -63,10 +63,10 @@ func TestReplicate(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		replicate.ServeHTTP(recorder, request)
 
-		assert.Equal(t, http.StatusOK, recorder.Code, "status code was changed by middleware")
-		assert.Equal(t, expectedBody, recorder.Body.String(), "response body was changed by middleware")
-		assert.Len(t, recorder.Header(), 2, "length of headers was changed by middleware")
-		assert.Equal(t, recorder.Header().Get(expectedHeader), expectedValue, "header was changed by middleware")
+		assert.Equal(t, http.StatusOK, recorder.Code, "status code was changed by the middleware")
+		assert.Equal(t, expectedBody, recorder.Body.String(), "response body was changed by the middleware")
+		assert.Len(t, recorder.Header(), 2, "length of headers was changed by the middleware")
+		assert.Equal(t, recorder.Header().Get(expectedHeader), expectedValue, "header was changed by the middleware")
 	})
 
 	t.Run("Producer error causes Internal Server Error", func(t *testing.T) {

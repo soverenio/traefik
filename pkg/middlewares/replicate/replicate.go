@@ -14,7 +14,7 @@ const (
 	typeName = "Replicate"
 )
 
-// replicate is a middleware used to send copies of requests and responses to arbitrary service
+// replicate is a middleware used to send copies of requests and responses to an arbitrary service
 type replicate struct {
 	next     http.Handler
 	name     string
