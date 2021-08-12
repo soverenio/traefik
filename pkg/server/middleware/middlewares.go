@@ -24,6 +24,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/middlewares/redirect"
 	"github.com/traefik/traefik/v2/pkg/middlewares/replacepath"
 	"github.com/traefik/traefik/v2/pkg/middlewares/replacepathregex"
+	"github.com/traefik/traefik/v2/pkg/middlewares/replicate"
 	"github.com/traefik/traefik/v2/pkg/middlewares/retry"
 	"github.com/traefik/traefik/v2/pkg/middlewares/stripprefix"
 	"github.com/traefik/traefik/v2/pkg/middlewares/stripprefixregex"
@@ -336,6 +337,20 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 		}
 		middleware = func(next http.Handler) (http.Handler, error) {
 			return stripprefixregex.New(ctx, next, *config.StripPrefixRegex, middlewareName)
+		}
+	}
+
+	// Replicate
+	if config.Replicate != nil {
+		middleware = func(next http.Handler) (http.Handler, error) {
+			producer, err := replicate.NewKafkaPublisher(config.Replicate.Topic, config.Replicate.Brokers)
+			// todo find the correct way to close the producer (producer.Close())
+			if err != nil {
+				noOpHandler := http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {})
+				err = errors.New(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
+				return noOpHandler, err
+			}
+			return replicate.New(ctx, next, producer, middlewareName)
 		}
 	}
 
