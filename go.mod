@@ -9,7 +9,8 @@ require (
 	github.com/Masterminds/semver v1.4.2 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/Microsoft/hcsshim v0.8.7 // indirect
-	github.com/Shopify/sarama v1.23.1 // indirect
+	github.com/ThreeDotsLabs/watermill v1.1.1
+	github.com/ThreeDotsLabs/watermill-kafka/v2 v2.2.1
 	github.com/abbot/go-http-auth v0.0.0-00010101000000-000000000000
 	github.com/abronan/valkeyrie v0.0.0-20200127174252-ef4277a138cd
 	github.com/aws/aws-sdk-go v1.37.27
