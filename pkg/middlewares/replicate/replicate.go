@@ -39,6 +39,10 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	method := req.Method
 	URL := req.URL.String()
+	host := req.Host
+	remoteAddr := req.RemoteAddr
+	requestHeaders := req.Header
+
 	requestBody, err := ioutil.ReadAll(body)
 	if err != nil {
 		logger.Debug(err)
@@ -50,12 +54,21 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	recorder := newResponseRecorder(rw)
 	r.next.ServeHTTP(recorder, req)
 	responseBody := recorder.GetBody().Bytes()
+	responseHeaders := recorder.Header()
 
 	err = r.producer.Produce(Event{
-		Method:       method,
-		URL:          URL,
-		RequestBody:  string(requestBody),
-		ResponseBody: string(responseBody),
+		Method: method,
+		URL:    URL,
+		Host:   host,
+		Client: remoteAddr,
+		Request: Payload{
+			Body:    string(requestBody),
+			Headers: requestHeaders,
+		},
+		Response: Payload{
+			Body:    string(responseBody),
+			Headers: responseHeaders,
+		},
 	})
 	if err != nil {
 		logger.Debug(err)

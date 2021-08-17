@@ -33,10 +33,18 @@ func TestReplicate(t *testing.T) {
 		expectedHeader := "X-Header"
 		expectedValue := "header value"
 		expectedEvent := Event{
-			Method:       method,
-			URL:          URL,
-			RequestBody:  expectedBody,
-			ResponseBody: expectedBody,
+			Method: method,
+			URL:    URL,
+			Host:   "example.com",
+			Client: "192.0.2.1:1234",
+			Request: Payload{
+				Body:    expectedBody,
+				Headers: map[string][]string{},
+			},
+			Response: Payload{
+				Body:    expectedBody,
+				Headers: map[string][]string{expectedHeader: {expectedValue}},
+			},
 		}
 
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
