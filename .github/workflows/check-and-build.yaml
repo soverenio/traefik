@@ -3,9 +3,10 @@ name: Build Traefik Image
 on:
   push:
     branches:
-      - smat
+      - '*'
     tags:
       - v[0-9]+.[0-9]+.[0-9]+
+  pull_request:
 
 env:
   SERVICE_NAME: gateway
