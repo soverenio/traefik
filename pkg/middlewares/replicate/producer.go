@@ -10,10 +10,17 @@ import (
 )
 
 type Event struct {
-	Method       string `json:"method"`
-	URL          string `json:"url"`
-	RequestBody  string `json:"requestBody"`
-	ResponseBody string `json:"responseBody"`
+	Method   string  `json:"method"`
+	URL      string  `json:"url"`
+	Host     string  `json:"host"`
+	Client   string  `json:"client"`
+	Request  Payload `json:"request"`
+	Response Payload `json:"response"`
+}
+
+type Payload struct {
+	Body    string              `json:"body"`
+	Headers map[string][]string `json:"headers"`
 }
 
 type Producer interface {
