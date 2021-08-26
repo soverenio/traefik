@@ -11,6 +11,7 @@ on:
 env:
   SERVICE_NAME: gateway
   REGISTRY_USERNAME: svrnbuilder
+  REGISTRY_ORG_NAME: soveren
   REGISTRY_PASSWORD: ${{ secrets.SVRNBUILDER_DOCKERHUB_TOKEN }}
   GO_VERSION: 1.16
 
@@ -59,7 +60,7 @@ jobs:
         run: |
           REF_SHORT="${GITHUB_REF##*/}"
           SHA_SHORT="${GITHUB_SHA:0:8}"
-          IMAGE_NAME="${GITHUB_REPOSITORY_OWNER}/${SERVICE_NAME}"
+          IMAGE_NAME="${REGISTRY_ORG_NAME}/${SERVICE_NAME}"
           [[ "${REF_SHORT}" == "master" ]] && IMAGE_TAG=latest || IMAGE_TAG="${REF_SHORT}"
 
           echo "REPO_SHORT=${REPO_SHORT}"             >> "${GITHUB_ENV}"
