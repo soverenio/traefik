@@ -3,7 +3,7 @@ name: Build Traefik Image
 on:
   push:
     branches:
-      - '*'
+      - 'smat'
     tags:
       - v[0-9]+.[0-9]+.[0-9]+
   pull_request:
@@ -61,7 +61,7 @@ jobs:
           REF_SHORT="${GITHUB_REF##*/}"
           SHA_SHORT="${GITHUB_SHA:0:8}"
           IMAGE_NAME="${REGISTRY_ORG_NAME}/${SERVICE_NAME}"
-          [[ "${REF_SHORT}" == "master" ]] && IMAGE_TAG=latest || IMAGE_TAG="${REF_SHORT}"
+          [[ "${REF_SHORT}" == "smat" ]] && IMAGE_TAG=latest || IMAGE_TAG="${REF_SHORT}"
 
           echo "REPO_SHORT=${REPO_SHORT}"             >> "${GITHUB_ENV}"
           echo "REF_SHORT=${REF_SHORT}"               >> "${GITHUB_ENV}"
