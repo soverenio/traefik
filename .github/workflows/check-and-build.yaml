@@ -1,0 +1,79 @@
+name: Build Traefik Image
+
+on:
+  push:
+    branches:
+      - smat
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+
+
+env:
+  SERVICE_NAME: gateway
+  REGISTRY_URL: hub.docker.com
+  REGISTRY_USERNAME: svrnbuilder
+  REGISTRY_PASSWORD: ${{ secrets.SVRNBUILDER_DOCKERHUB_TOKEN }}
+  GO_VERSION: 1.16
+
+jobs:
+  test-unit:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/go/src/github.com/traefik/traefik
+
+    steps:
+      - name: Set up Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          path: go/src/github.com/traefik/traefik
+          fetch-depth: 0
+
+      - name: Cache Go modules
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-test-unit-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-test-unit-go-
+
+      - name: Installing dependencies
+        run: go install github.com/containous/go-bindata/go-bindata@v1.0.0
+
+      - name: Tests
+        run: make test-unit
+
+  build-push:
+    needs: test-unit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Set env
+        run: |
+          REF_SHORT="${GITHUB_REF##*/}"
+          SHA_SHORT="${GITHUB_SHA:0:8}"
+          IMAGE_NAME="${REGISTRY_URL}/${GITHUB_REPOSITORY_OWNER}/${SERVICE_NAME}"
+          [[ "${REF_SHORT}" == "master" ]] && IMAGE_TAG=latest || IMAGE_TAG="${REF_SHORT}"
+
+          echo "REPO_SHORT=${REPO_SHORT}"             >> "${GITHUB_ENV}"
+          echo "REF_SHORT=${REF_SHORT}"               >> "${GITHUB_ENV}"
+          echo "IMAGE_NAME=${IMAGE_NAME}"             >> "${GITHUB_ENV}"
+          echo "IMAGE_TAG=${IMAGE_TAG}"               >> "${GITHUB_ENV}"
+
+      - name: Build docker image
+        run: |
+          docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" -f exp.Dockerfile .
+
+      - name: Log into registry
+        run: echo "${REGISTRY_PASSWORD}" | docker login "${REGISTRY_URL}" -u "${REGISTRY_USERNAME}" --password-stdin
+
+      - name: Push docker image
+        run: |
+          docker push "${IMAGE_NAME}:${IMAGE_TAG}"
