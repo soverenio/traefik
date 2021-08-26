@@ -10,7 +10,6 @@ on:
 
 env:
   SERVICE_NAME: gateway
-  REGISTRY_URL: hub.docker.com
   REGISTRY_USERNAME: svrnbuilder
   REGISTRY_PASSWORD: ${{ secrets.SVRNBUILDER_DOCKERHUB_TOKEN }}
   GO_VERSION: 1.16
@@ -60,7 +59,7 @@ jobs:
         run: |
           REF_SHORT="${GITHUB_REF##*/}"
           SHA_SHORT="${GITHUB_SHA:0:8}"
-          IMAGE_NAME="${REGISTRY_URL}/${GITHUB_REPOSITORY_OWNER}/${SERVICE_NAME}"
+          IMAGE_NAME="${GITHUB_REPOSITORY_OWNER}/${SERVICE_NAME}"
           [[ "${REF_SHORT}" == "master" ]] && IMAGE_TAG=latest || IMAGE_TAG="${REF_SHORT}"
 
           echo "REPO_SHORT=${REPO_SHORT}"             >> "${GITHUB_ENV}"
@@ -72,9 +71,14 @@ jobs:
         run: |
           docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" -f exp.Dockerfile .
 
-      - name: Log into registry
-        run: echo "${REGISTRY_PASSWORD}" | docker login "${REGISTRY_URL}" -u "${REGISTRY_USERNAME}" --password-stdin
+      - name: Log in to Docker Hub
+          uses: docker/login-action@v1
+          with:
+            username: ${REGISTRY_USERNAME}
+            password: ${REGISTRY_PASSWORD}
 
-      - name: Push docker image
-        run: |
-          docker push "${IMAGE_NAME}:${IMAGE_TAG}"
+      - name: Push to Docker Hub
+          uses: docker/build-push-action@v2
+          with:
+            push: true
+            tags: ${IMAGE_NAME}:${IMAGE_TAG}
