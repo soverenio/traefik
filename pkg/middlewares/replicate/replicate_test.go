@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,6 +62,8 @@ func TestReplicate(t *testing.T) {
 		})
 
 		producer := MockProducer(func(event Event) error {
+			assert.NotEmpty(t, event.Time)
+			expectedEvent.Time = event.Time
 			assert.Equal(t, expectedEvent, event)
 			return nil
 		})
@@ -98,8 +101,33 @@ func TestReplicate(t *testing.T) {
 	})
 }
 
+func TestAlive(t *testing.T) {
+	t.Run("Alive message send", func(t *testing.T) {
+		var calls int
+		producer := MockProducer(func(event Event) error {
+			assert.NotEmpty(t, event.Time)
+			assert.NotEmpty(t, event.Host)
+			calls = calls + 1
+			return nil
+		})
+
+		duration := time.Second * 3
+		ctx, cancel := context.WithCancel(context.Background())
+		err := StartAlive(ctx, producer, "test-replicate", "alive", duration)
+		require.NoError(t, err)
+		time.Sleep(duration + time.Second)
+		assert.Equal(t, 1, calls)
+		cancel()
+		time.Sleep(duration + time.Second)
+		assert.Equal(t, 1, calls)
+	})
+}
+
 type MockProducer func(Event) error
 
 func (m MockProducer) Produce(ev Event) error {
+	return m(ev)
+}
+func (m MockProducer) ProduceTo(ev Event, topic string) error {
 	return m(ev)
 }

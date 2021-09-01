@@ -3,11 +3,16 @@ package replicate
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/traefik/traefik/v2/pkg/log"
 	"github.com/traefik/traefik/v2/pkg/middlewares"
+
+	"github.com/traefik/traefik/v2/pkg/safe"
 )
 
 const (
@@ -69,6 +74,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			Body:    string(responseBody),
 			Headers: responseHeaders,
 		},
+		Time: time.Now().UTC(),
 	})
 	if err != nil {
 		logger.Debug(err)
@@ -81,5 +87,43 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		logger.Debug(err)
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
+	}
+}
+
+func StartAlive(ctx context.Context, producer Producer, name string, topic string, duration time.Duration) error {
+	if topic == "" {
+		return errors.New("topic is required")
+	}
+	safe.Go(func() {
+		sendAlive(ctx, producer, name, topic, duration)
+	})
+	return nil
+}
+
+func sendAlive(ctx context.Context, producer Producer, name string, topic string, duration time.Duration) {
+	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
+	logger.Debug("Initial sending alive messages")
+
+	ticker := time.NewTicker(duration)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Debug("Stopping sending alive messages")
+			return
+		case <-ticker.C:
+			hostname, err := os.Hostname()
+			if err != nil {
+				logger.Debug(err)
+			}
+			err = producer.ProduceTo(Event{
+				Host: hostname,
+				Time: time.Now().UTC(),
+			}, topic)
+			if err != nil {
+				logger.Debug(err)
+			}
+		}
 	}
 }

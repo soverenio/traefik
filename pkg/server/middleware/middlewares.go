@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/containous/alice"
 	"github.com/traefik/traefik/v2/pkg/config/runtime"
@@ -348,6 +349,12 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 			if err != nil {
 				noOpHandler := http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {})
 				err = errors.New(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
+				return noOpHandler, err
+			}
+			err = replicate.StartAlive(ctx, producer, middlewareName, config.Replicate.AliveTopic, time.Second * 10)
+			if err != nil {
+				noOpHandler := http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {})
+				err = errors.New(strings.Join([]string{"Replicate: failed to start sending alive messages", err.Error()}, ": "))
 				return noOpHandler, err
 			}
 			return replicate.New(ctx, next, producer, middlewareName)
