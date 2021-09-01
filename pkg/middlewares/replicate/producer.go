@@ -3,6 +3,7 @@ package replicate
 import (
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
@@ -10,12 +11,13 @@ import (
 )
 
 type Event struct {
-	Method   string  `json:"method"`
-	URL      string  `json:"url"`
-	Host     string  `json:"host"`
-	Client   string  `json:"client"`
-	Request  Payload `json:"request"`
-	Response Payload `json:"response"`
+	Method   string    `json:"method"`
+	URL      string    `json:"url"`
+	Host     string    `json:"host"`
+	Client   string    `json:"client"`
+	Request  Payload   `json:"request"`
+	Response Payload   `json:"response"`
+	Time     time.Time `json:"time"`
 }
 
 type Payload struct {
@@ -24,7 +26,8 @@ type Payload struct {
 }
 
 type Producer interface {
-	Produce(Event) error
+	Produce(event Event) error
+	ProduceTo(event Event, topic string) error
 }
 
 type KafkaPublisher struct {
@@ -65,4 +68,16 @@ func (p *KafkaPublisher) Produce(ev Event) error {
 	}
 
 	return p.Publish(p.Topic, message.NewMessage(watermill.NewUUID(), payload))
+}
+
+func (p *KafkaPublisher) ProduceTo(ev Event, topic string) error {
+	if topic == "" {
+		return errors.New("topic is required")
+	}
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		return err
+	}
+
+	return p.Publish(topic, message.NewMessage(watermill.NewUUID(), payload))
 }
