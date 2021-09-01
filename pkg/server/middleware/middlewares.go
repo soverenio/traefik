@@ -351,7 +351,7 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 				err = errors.New(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
 				return noOpHandler, err
 			}
-			err = replicate.StartAlive(ctx, producer, middlewareName, config.Replicate.AliveTopic, time.Second * 10)
+			err = replicate.StartAlive(ctx, producer, middlewareName, config.Replicate.AliveTopic, time.Second*10)
 			if err != nil {
 				noOpHandler := http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {})
 				err = errors.New(strings.Join([]string{"Replicate: failed to start sending alive messages", err.Error()}, ": "))

@@ -107,7 +107,7 @@ func TestAlive(t *testing.T) {
 		producer := MockProducer(func(event Event) error {
 			assert.NotEmpty(t, event.Time)
 			assert.NotEmpty(t, event.Host)
-			calls = calls + 1
+			calls++
 			return nil
 		})
 
@@ -128,6 +128,7 @@ type MockProducer func(Event) error
 func (m MockProducer) Produce(ev Event) error {
 	return m(ev)
 }
+
 func (m MockProducer) ProduceTo(ev Event, topic string) error {
 	return m(ev)
 }
