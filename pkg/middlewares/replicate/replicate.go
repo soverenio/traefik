@@ -7,8 +7,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/traefik/traefik/v2/pkg/config/runtime"
 	"github.com/traefik/traefik/v2/pkg/log"
 	"github.com/traefik/traefik/v2/pkg/middlewares"
 	"github.com/traefik/traefik/v2/pkg/safe"
@@ -23,16 +25,21 @@ type replicate struct {
 	next     http.Handler
 	name     string
 	producer Producer
+	config   *runtime.MiddlewareInfo
 }
 
 // New creates a new http handler.
-func New(ctx context.Context, next http.Handler, producer Producer, name string) (http.Handler, error) {
-	log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName)).Debug("Creating middleware")
-	return &replicate{
+func New(ctx context.Context, config *runtime.MiddlewareInfo, middlewareName string, next http.Handler) (http.Handler, error) {
+	log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).Debug("Creating middleware")
+
+	replicate := &replicate{
 		next:     next,
-		name:     name,
-		producer: producer,
-	}, nil
+		name:     middlewareName,
+		config:   config,
+		producer: nil,
+	}
+	go replicate.connectProducer(ctx, config, middlewareName, next)
+	return replicate, nil
 }
 
 func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
@@ -60,7 +67,18 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	responseBody := recorder.GetBody().Bytes()
 	responseHeaders := recorder.Header()
 
-	err = r.producer.Produce(Event{
+	_, err = rw.Write(responseBody)
+	if err != nil {
+		logger.Debug(err)
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if r.producer == nil {
+		logger.Warn("Connect to kafka failed")
+		return
+	}
+	// todo don't return errors
+	go r.producer.Produce(Event{
 		Method: method,
 		URL:    URL,
 		Host:   host,
@@ -75,18 +93,6 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		},
 		Time: time.Now().UTC(),
 	})
-	if err != nil {
-		logger.Debug(err)
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	_, err = rw.Write(responseBody)
-	if err != nil {
-		logger.Debug(err)
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
-		return
-	}
 }
 
 func StartAlive(ctx context.Context, producer Producer, name string, topic string, duration time.Duration) error {
@@ -97,6 +103,24 @@ func StartAlive(ctx context.Context, producer Producer, name string, topic strin
 		sendAlive(ctx, producer, name, topic, duration)
 	})
 	return nil
+}
+
+func (r *replicate) connectProducer(ctx context.Context, config *runtime.MiddlewareInfo, middlewareName string, next http.Handler) {
+	for {
+		producer, err := NewKafkaPublisher(config.Replicate.Topic, config.Replicate.Brokers)
+		if err == nil {
+			r.producer = producer
+			break
+		}
+		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
+			Warn(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
+	}
+
+	err := StartAlive(ctx, r.producer, middlewareName, config.Replicate.AliveTopic, time.Second*10)
+	if err != nil {
+		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
+			Warn(strings.Join([]string{"Replicate: failed to start sending alive messages", err.Error()}, ": "))
+	}
 }
 
 func sendAlive(ctx context.Context, producer Producer, name string, topic string, duration time.Duration) {

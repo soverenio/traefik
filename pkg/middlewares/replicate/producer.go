@@ -1,6 +1,7 @@
 package replicate
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -8,6 +9,10 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
+
+	"github.com/traefik/traefik/v2/pkg/log"
+
+	"github.com/traefik/traefik/v2/pkg/middlewares"
 )
 
 type Event struct {
@@ -31,6 +36,7 @@ type Producer interface {
 }
 
 type KafkaPublisher struct {
+	ctx context.Context
 	message.Publisher
 
 	Topic string
@@ -62,12 +68,23 @@ func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) 
 }
 
 func (p *KafkaPublisher) Produce(ev Event) error {
+	// todo need correct name
+	logger := log.FromContext(middlewares.GetLoggerCtx(context.Background(), "producer", typeName))
 	payload, err := json.Marshal(ev)
 	if err != nil {
+		logger.Debug(err)
 		return err
 	}
+	err = p.Publish(p.Topic, message.NewMessage(watermill.NewUUID(), payload))
+	if err != nil {
+		logger.Debug(err)
+		return err
+	}
+	// todo don't send err
+	// todo delete this
+	logger.Info("Send message to kafka")
 
-	return p.Publish(p.Topic, message.NewMessage(watermill.NewUUID(), payload))
+	return nil
 }
 
 func (p *KafkaPublisher) ProduceTo(ev Event, topic string) error {
