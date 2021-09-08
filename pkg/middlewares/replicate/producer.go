@@ -11,8 +11,6 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 
 	"github.com/traefik/traefik/v2/pkg/log"
-
-	"github.com/traefik/traefik/v2/pkg/middlewares"
 )
 
 type Event struct {
@@ -38,13 +36,11 @@ type Producer interface {
 type KafkaPublisher struct {
 	ctx context.Context
 	message.Publisher
-
-	Topic string
+	brokers []string
+	Topic   string
 }
 
 func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) {
-	logger := watermill.NewStdLogger(true, false)
-
 	if topic == "" {
 		return nil, errors.New("topic is required")
 	}
@@ -52,24 +48,37 @@ func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) 
 		return nil, errors.New("at least one broker is required")
 	}
 
-	config := kafka.PublisherConfig{
-		Brokers:   brokers,
-		Marshaler: kafka.DefaultMarshaler{},
-	}
-
-	publisher, err := kafka.NewPublisher(config, logger)
-	if err != nil {
-		return nil, err
-	}
 	return &KafkaPublisher{
-		Publisher: publisher,
+		Publisher: nil,
 		Topic:     topic,
+		brokers:   brokers,
 	}, nil
 }
 
+func (p *KafkaPublisher) SyncProducer(ctx context.Context) {
+	logger := log.FromContext(ctx)
+	config := kafka.PublisherConfig{
+		Brokers:   p.brokers,
+		Marshaler: kafka.DefaultMarshaler{},
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("completing the attempt to connect to kafka")
+			return
+		default:
+			publisher, err := kafka.NewPublisher(config, watermill.NewStdLogger(true, false))
+			if err == nil {
+				p.Publisher = publisher
+				return
+			}
+			logger.Error("failed to create a producer")
+		}
+	}
+}
+
 func (p *KafkaPublisher) Produce(ev Event) error {
-	// todo need correct name
-	logger := log.FromContext(middlewares.GetLoggerCtx(context.Background(), "producer", typeName))
+	logger := log.FromContext(context.Background())
 	payload, err := json.Marshal(ev)
 	if err != nil {
 		logger.Debug(err)
@@ -80,7 +89,6 @@ func (p *KafkaPublisher) Produce(ev Event) error {
 		logger.Debug(err)
 		return err
 	}
-	// todo don't send err
 	// todo delete this
 	logger.Info("Send message to kafka")
 

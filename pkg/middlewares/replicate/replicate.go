@@ -26,6 +26,7 @@ type replicate struct {
 	name     string
 	producer Producer
 	config   *runtime.MiddlewareInfo
+	wPool    *WPool
 }
 
 // New creates a new http handler.
@@ -37,13 +38,18 @@ func New(ctx context.Context, config *runtime.MiddlewareInfo, middlewareName str
 		name:     middlewareName,
 		config:   config,
 		producer: nil,
+		// todo poolSize to config
+		wPool: NewLimitPool(ctx, 100),
 	}
+	replicate.wPool.Start()
+
 	go replicate.connectProducer(ctx, config, middlewareName, next)
 	return replicate, nil
 }
 
 func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	logger := log.FromContext(middlewares.GetLoggerCtx(context.Background(), r.name, typeName))
+	ctx := context.Background()
+	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, r.name, typeName))
 
 	body := req.Body
 	defer body.Close()
@@ -77,21 +83,22 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		logger.Warn("Connect to kafka failed")
 		return
 	}
-	// todo don't return errors
-	go r.producer.Produce(Event{
-		Method: method,
-		URL:    URL,
-		Host:   host,
-		Client: remoteAddr,
-		Request: Payload{
-			Body:    string(requestBody),
-			Headers: requestHeaders,
-		},
-		Response: Payload{
-			Body:    string(responseBody),
-			Headers: responseHeaders,
-		},
-		Time: time.Now().UTC(),
+	r.wPool.Do(func() {
+		sendEvent(ctx, r.producer, Event{
+			Method: method,
+			URL:    URL,
+			Host:   host,
+			Client: remoteAddr,
+			Request: Payload{
+				Body:    string(requestBody),
+				Headers: requestHeaders,
+			},
+			Response: Payload{
+				Body:    string(responseBody),
+				Headers: responseHeaders,
+			},
+			Time: time.Now().UTC(),
+		}, r.name)
 	})
 }
 
@@ -106,20 +113,28 @@ func StartAlive(ctx context.Context, producer Producer, name string, topic strin
 }
 
 func (r *replicate) connectProducer(ctx context.Context, config *runtime.MiddlewareInfo, middlewareName string, next http.Handler) {
-	for {
-		producer, err := NewKafkaPublisher(config.Replicate.Topic, config.Replicate.Brokers)
-		if err == nil {
-			r.producer = producer
-			break
-		}
-		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
-			Warn(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
-	}
 
-	err := StartAlive(ctx, r.producer, middlewareName, config.Replicate.AliveTopic, time.Second*10)
+	producer, err := NewKafkaPublisher(config.Replicate.Topic, config.Replicate.Brokers)
+	if err != nil {
+		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
+			Fatal(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
+		return
+	}
+	producer.SyncProducer(ctx)
+	r.producer = producer
+
+	err = StartAlive(ctx, r.producer, middlewareName, config.Replicate.AliveTopic, time.Second*10)
 	if err != nil {
 		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
 			Warn(strings.Join([]string{"Replicate: failed to start sending alive messages", err.Error()}, ": "))
+	}
+}
+
+func sendEvent(ctx context.Context, producer Producer, event Event, name string) {
+	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
+	err := producer.Produce(event)
+	if err != nil {
+		logger.Error(err)
 	}
 }
 
