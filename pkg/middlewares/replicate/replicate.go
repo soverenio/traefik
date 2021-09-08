@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/traefik/traefik/v2/pkg/config/runtime"
@@ -22,6 +23,7 @@ const (
 
 // replicate is a middleware used to send copies of requests and responses to an arbitrary service
 type replicate struct {
+	sync.RWMutex
 	next     http.Handler
 	name     string
 	producer Producer
@@ -79,10 +81,12 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	r.RWMutex.RLock()
 	if r.producer == nil {
 		logger.Warn("Connect to kafka failed")
 		return
 	}
+	r.RWMutex.RUnlock()
 	r.wPool.Do(func() {
 		sendEvent(ctx, r.producer, Event{
 			Method: method,
@@ -120,7 +124,9 @@ func (r *replicate) connectProducer(ctx context.Context, config *runtime.Middlew
 			Fatal(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
 		return
 	}
+	r.RWMutex.Lock()
 	producer.SyncProducer(ctx)
+	r.RWMutex.Unlock()
 	r.producer = producer
 
 	err = StartAlive(ctx, r.producer, middlewareName, config.Replicate.AliveTopic, time.Second*10)
