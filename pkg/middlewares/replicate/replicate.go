@@ -7,8 +7,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
+	"github.com/traefik/traefik/v2/pkg/config/runtime"
 	"github.com/traefik/traefik/v2/pkg/log"
 	"github.com/traefik/traefik/v2/pkg/middlewares"
 	"github.com/traefik/traefik/v2/pkg/safe"
@@ -18,25 +21,34 @@ const (
 	typeName = "Replicate"
 )
 
-// replicate is a middleware used to send copies of requests and responses to an arbitrary service
+// replicate is a middleware used to send copies of requests and responses to an arbitrary service.
 type replicate struct {
+	sync.RWMutex
 	next     http.Handler
 	name     string
-	producer Producer
+	producer producer
+	wPool    *wPool
 }
 
 // New creates a new http handler.
-func New(ctx context.Context, next http.Handler, producer Producer, name string) (http.Handler, error) {
-	log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName)).Debug("Creating middleware")
-	return &replicate{
+func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo, middlewareName string) http.Handler {
+	log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).Debug("Creating middleware")
+
+	replicate := &replicate{
 		next:     next,
-		name:     name,
-		producer: producer,
-	}, nil
+		name:     middlewareName,
+		producer: nil,
+		wPool:    newLimitPool(ctx, config.Replicate.WorkerPoolSize),
+	}
+	replicate.wPool.Start()
+
+	go replicate.connectProducer(ctx, config, middlewareName, next)
+	return replicate
 }
 
 func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	logger := log.FromContext(middlewares.GetLoggerCtx(context.Background(), r.name, typeName))
+	ctx := context.Background()
+	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, r.name, typeName))
 
 	body := req.Body
 	defer body.Close()
@@ -60,36 +72,40 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	responseBody := recorder.GetBody().Bytes()
 	responseHeaders := recorder.Header()
 
-	err = r.producer.Produce(Event{
-		Method: method,
-		URL:    URL,
-		Host:   host,
-		Client: remoteAddr,
-		Request: Payload{
-			Body:    string(requestBody),
-			Headers: requestHeaders,
-		},
-		Response: Payload{
-			Body:    string(responseBody),
-			Headers: responseHeaders,
-		},
-		Time: time.Now().UTC(),
-	})
-	if err != nil {
-		logger.Debug(err)
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	_, err = rw.Write(responseBody)
 	if err != nil {
 		logger.Debug(err)
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	r.RWMutex.RLock()
+	defer r.RWMutex.RUnlock()
+	if r.producer == nil {
+		logger.Warn("Connect to kafka failed")
+		return
+	}
+
+	r.wPool.Do(func() {
+		sendEvent(ctx, r.producer, Event{
+			Method: method,
+			URL:    URL,
+			Host:   host,
+			Client: remoteAddr,
+			Request: Payload{
+				Body:    string(requestBody),
+				Headers: requestHeaders,
+			},
+			Response: Payload{
+				Body:    string(responseBody),
+				Headers: responseHeaders,
+			},
+			Time: time.Now().UTC(),
+		}, r.name)
+	})
 }
 
-func StartAlive(ctx context.Context, producer Producer, name string, topic string, duration time.Duration) error {
+// StartAlive start regular message sending alive message to kafka for  health checking.
+func StartAlive(ctx context.Context, producer producer, name string, topic string, duration time.Duration) error {
 	if topic == "" {
 		return errors.New("topic is required")
 	}
@@ -99,7 +115,33 @@ func StartAlive(ctx context.Context, producer Producer, name string, topic strin
 	return nil
 }
 
-func sendAlive(ctx context.Context, producer Producer, name string, topic string, duration time.Duration) {
+func (r *replicate) connectProducer(ctx context.Context, config *runtime.MiddlewareInfo, middlewareName string, next http.Handler) {
+	producer, err := newKafkaPublisher(config.Replicate.Topic, config.Replicate.Brokers)
+	if err != nil {
+		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
+			Fatal(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
+		return
+	}
+	producer.syncProducer(ctx)
+	r.RWMutex.Lock()
+	r.producer = producer
+	r.RWMutex.Unlock()
+	err = StartAlive(ctx, r.producer, middlewareName, config.Replicate.AliveTopic, time.Second*10)
+	if err != nil {
+		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
+			Warn(strings.Join([]string{"Replicate: failed to start sending alive messages", err.Error()}, ": "))
+	}
+}
+
+func sendEvent(ctx context.Context, producer producer, event Event, name string) {
+	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
+	err := producer.produce(event)
+	if err != nil {
+		logger.Error(err)
+	}
+}
+
+func sendAlive(ctx context.Context, producer producer, name string, topic string, duration time.Duration) {
 	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
 	logger.Debug("Initial sending alive messages")
 
@@ -116,7 +158,7 @@ func sendAlive(ctx context.Context, producer Producer, name string, topic string
 			if err != nil {
 				logger.Debug(err)
 			}
-			err = producer.ProduceTo(Event{
+			err = producer.produceTo(Event{
 				Host: hostname,
 				Time: time.Now().UTC(),
 			}, topic)

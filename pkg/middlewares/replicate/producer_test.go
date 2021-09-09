@@ -31,20 +31,14 @@ func TestNewKafkaPublisher(t *testing.T) {
 			brokers: nil,
 			expMsg:  "at least one broker is required",
 		},
-		{
-			name:    "Fails to connect broker",
-			topic:   "test-topic",
-			brokers: []string{"broker:1234"},
-			expMsg:  "cannot create Kafka producer",
-		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			publisher, err := NewKafkaPublisher(tc.topic, tc.brokers)
+			publisher, err := newKafkaPublisher(tc.topic, tc.brokers)
 
-			assert.Nil(t, publisher)
 			assert.Error(t, err)
+			assert.Nil(t, publisher)
 			assert.Contains(t, err.Error(), tc.expMsg)
 		})
 	}

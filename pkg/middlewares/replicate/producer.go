@@ -1,6 +1,7 @@
 package replicate
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -8,8 +9,11 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
+
+	"github.com/traefik/traefik/v2/pkg/log"
 )
 
+// Event is message with info about request and response.This message send to kafka.
 type Event struct {
 	Method   string    `json:"method"`
 	URL      string    `json:"url"`
@@ -20,25 +24,27 @@ type Event struct {
 	Time     time.Time `json:"time"`
 }
 
+// Payload body and headers of  request and response.
 type Payload struct {
 	Body    string              `json:"body"`
 	Headers map[string][]string `json:"headers"`
 }
 
-type Producer interface {
-	Produce(event Event) error
-	ProduceTo(event Event, topic string) error
+// Producer is interface for send message in message brokers.
+type producer interface {
+	produce(event Event) error
+	produceTo(event Event, topic string) error
 }
 
-type KafkaPublisher struct {
+// KafkaPublisher publisher for kafka.
+type kafkaPublisher struct {
 	message.Publisher
-
-	Topic string
+	brokers []string
+	topic   string
 }
 
-func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) {
-	logger := watermill.NewStdLogger(true, false)
-
+// NewKafkaPublisher create new  KafkaPublisher.
+func newKafkaPublisher(topic string, brokers []string) (*kafkaPublisher, error) {
 	if topic == "" {
 		return nil, errors.New("topic is required")
 	}
@@ -46,31 +52,56 @@ func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) 
 		return nil, errors.New("at least one broker is required")
 	}
 
-	config := kafka.PublisherConfig{
-		Brokers:   brokers,
-		Marshaler: kafka.DefaultMarshaler{},
-	}
-
-	publisher, err := kafka.NewPublisher(config, logger)
-	if err != nil {
-		return nil, err
-	}
-	return &KafkaPublisher{
-		Publisher: publisher,
-		Topic:     topic,
+	return &kafkaPublisher{
+		Publisher: nil,
+		topic:     topic,
+		brokers:   brokers,
 	}, nil
 }
 
-func (p *KafkaPublisher) Produce(ev Event) error {
-	payload, err := json.Marshal(ev)
-	if err != nil {
-		return err
+// SyncProducer connect to kafka.
+func (p *kafkaPublisher) syncProducer(ctx context.Context) {
+	logger := log.FromContext(ctx)
+	config := kafka.PublisherConfig{
+		Brokers:   p.brokers,
+		Marshaler: kafka.DefaultMarshaler{},
 	}
-
-	return p.Publish(p.Topic, message.NewMessage(watermill.NewUUID(), payload))
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("completing the attempt to connect to kafka")
+			return
+		default:
+			publisher, err := kafka.NewPublisher(config, watermill.NewStdLogger(true, false))
+			if err == nil {
+				p.Publisher = publisher
+				return
+			}
+			logger.Error("failed to create a producer")
+		}
+	}
 }
 
-func (p *KafkaPublisher) ProduceTo(ev Event, topic string) error {
+// Produce send event to kafka.
+func (p *kafkaPublisher) produce(ev Event) error {
+	logger := log.FromContext(context.Background())
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		logger.Error(err)
+		return err
+	}
+	err = p.Publish(p.topic, message.NewMessage(watermill.NewUUID(), payload))
+	if err != nil {
+		logger.Error(err)
+		return err
+	}
+	logger.Debug("Send message to kafka")
+
+	return nil
+}
+
+// ProduceTo send event to kafka in specific topic.
+func (p *kafkaPublisher) produceTo(ev Event, topic string) error {
 	if topic == "" {
 		return errors.New("topic is required")
 	}
