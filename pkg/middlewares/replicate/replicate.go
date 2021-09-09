@@ -27,25 +27,23 @@ type replicate struct {
 	next     http.Handler
 	name     string
 	producer Producer
-	config   *runtime.MiddlewareInfo
 	wPool    *WPool
 }
 
 // New creates a new http handler.
-func New(ctx context.Context, config *runtime.MiddlewareInfo, middlewareName string, next http.Handler) (http.Handler, error) {
+func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo, middlewareName string) http.Handler {
 	log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).Debug("Creating middleware")
 
 	replicate := &replicate{
 		next:     next,
 		name:     middlewareName,
-		config:   config,
 		producer: nil,
 		wPool:    NewLimitPool(ctx, config.Replicate.WorkerPoolSize),
 	}
 	replicate.wPool.Start()
 
 	go replicate.connectProducer(ctx, config, middlewareName, next)
-	return replicate, nil
+	return replicate
 }
 
 func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {

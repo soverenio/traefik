@@ -7,24 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestNewReplicate(t *testing.T) {
-	t.Run("Creates an instance with valid params", func(t *testing.T) {
-		next := http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {})
-		producer := MockProducer(func(event Event) error { return nil })
-		name := "test-replicate"
-
-		handler, err := New(context.Background(), next, producer, name)
-		assert.NoError(t, err)
-		assert.NotNil(t, handler)
-	})
-}
 
 func TestReplicate(t *testing.T) {
 	t.Run("The middleware doesn't affect on request and response", func(t *testing.T) {
@@ -67,8 +56,14 @@ func TestReplicate(t *testing.T) {
 			assert.Equal(t, expectedEvent, event)
 			return nil
 		})
-		replicate, err := New(context.Background(), next, producer, "test-replicate")
-		require.NoError(t, err)
+		ctx := context.Background()
+		replicate := replicate{
+			RWMutex:  sync.RWMutex{},
+			next:     next,
+			name:     "test-replicate",
+			producer: producer,
+			wPool:    NewLimitPool(ctx, defaultPoolSize),
+		}
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
 		recorder := httptest.NewRecorder()
@@ -89,9 +84,14 @@ func TestReplicate(t *testing.T) {
 			return errors.New("test-error")
 		})
 
-		replicate, err := New(context.Background(), next, producer, "test-replicate")
-		require.NoError(t, err)
-
+		ctx := context.Background()
+		replicate := replicate{
+			RWMutex:  sync.RWMutex{},
+			next:     next,
+			name:     "test-replicate",
+			producer: producer,
+			wPool:    NewLimitPool(ctx, defaultPoolSize),
+		}
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/test", nil)
 		replicate.ServeHTTP(recorder, request)

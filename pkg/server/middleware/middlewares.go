@@ -345,7 +345,7 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 	if config.Replicate != nil {
 		middleware = func(next http.Handler) (http.Handler, error) {
 			// todo find the correct way to close the producer (producer.Close())
-			return replicate.New(ctx, config, middlewareName, next)
+			return replicate.New(ctx, next, config, middlewareName), nil
 		}
 	}
 
