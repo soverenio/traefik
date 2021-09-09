@@ -62,7 +62,7 @@ func TestReplicate(t *testing.T) {
 			next:     next,
 			name:     "test-replicate",
 			producer: producer,
-			wPool:    NewLimitPool(ctx, defaultPoolSize),
+			wPool:    newLimitPool(ctx, defaultPoolSize),
 		}
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
@@ -90,7 +90,7 @@ func TestReplicate(t *testing.T) {
 			next:     next,
 			name:     "test-replicate",
 			producer: producer,
-			wPool:    NewLimitPool(ctx, defaultPoolSize),
+			wPool:    newLimitPool(ctx, defaultPoolSize),
 		}
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -125,10 +125,10 @@ func TestAlive(t *testing.T) {
 
 type MockProducer func(Event) error
 
-func (m MockProducer) Produce(ev Event) error {
+func (m MockProducer) produce(ev Event) error {
 	return m(ev)
 }
 
-func (m MockProducer) ProduceTo(ev Event, topic string) error {
+func (m MockProducer) produceTo(ev Event, topic string) error {
 	return m(ev)
 }

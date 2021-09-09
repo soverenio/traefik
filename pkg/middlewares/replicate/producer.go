@@ -31,20 +31,20 @@ type Payload struct {
 }
 
 // Producer is interface for send message in message brokers.
-type Producer interface {
-	Produce(event Event) error
-	ProduceTo(event Event, topic string) error
+type producer interface {
+	produce(event Event) error
+	produceTo(event Event, topic string) error
 }
 
 // KafkaPublisher publisher for kafka.
-type KafkaPublisher struct {
+type kafkaPublisher struct {
 	message.Publisher
 	brokers []string
 	Topic   string
 }
 
 // NewKafkaPublisher create new  KafkaPublisher.
-func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) {
+func NewKafkaPublisher(topic string, brokers []string) (*kafkaPublisher, error) {
 	if topic == "" {
 		return nil, errors.New("topic is required")
 	}
@@ -52,7 +52,7 @@ func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) 
 		return nil, errors.New("at least one broker is required")
 	}
 
-	return &KafkaPublisher{
+	return &kafkaPublisher{
 		Publisher: nil,
 		Topic:     topic,
 		brokers:   brokers,
@@ -60,7 +60,7 @@ func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) 
 }
 
 // SyncProducer connect to kafka.
-func (p *KafkaPublisher) SyncProducer(ctx context.Context) {
+func (p *kafkaPublisher) syncProducer(ctx context.Context) {
 	logger := log.FromContext(ctx)
 	config := kafka.PublisherConfig{
 		Brokers:   p.brokers,
@@ -83,7 +83,7 @@ func (p *KafkaPublisher) SyncProducer(ctx context.Context) {
 }
 
 // Produce send event to kafka.
-func (p *KafkaPublisher) Produce(ev Event) error {
+func (p *kafkaPublisher) produce(ev Event) error {
 	logger := log.FromContext(context.Background())
 	payload, err := json.Marshal(ev)
 	if err != nil {
@@ -101,7 +101,7 @@ func (p *KafkaPublisher) Produce(ev Event) error {
 }
 
 // ProduceTo send event to kafka in specific topic.
-func (p *KafkaPublisher) ProduceTo(ev Event, topic string) error {
+func (p *kafkaPublisher) produceTo(ev Event, topic string) error {
 	if topic == "" {
 		return errors.New("topic is required")
 	}

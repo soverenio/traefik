@@ -10,7 +10,7 @@ import (
 const defaultPoolSize = 10
 
 // WPool is  pool of workers with limit of workers.
-type WPool struct {
+type wPool struct {
 	ctx          context.Context
 	waitGroup    sync.WaitGroup
 	workersCount int
@@ -24,7 +24,7 @@ type worker struct {
 }
 
 // NewLimitPool create new Worker Pool.
-func NewLimitPool(parentCtx context.Context, poolSize int) *WPool {
+func newLimitPool(parentCtx context.Context, poolSize int) *wPool {
 	ctx, cancel := context.WithCancel(parentCtx)
 	if poolSize == 0 {
 		logger := log.FromContext(ctx)
@@ -32,7 +32,7 @@ func NewLimitPool(parentCtx context.Context, poolSize int) *WPool {
 		poolSize = defaultPoolSize
 	}
 
-	return &WPool{
+	return &wPool{
 		ctx:          ctx,
 		workersCount: poolSize,
 		jobs:         make(chan func(), poolSize),
@@ -48,7 +48,7 @@ func newWorker(ctx context.Context, jobs chan func()) *worker {
 }
 
 // Start create workers in worker pool and start working.
-func (p *WPool) Start() {
+func (p *wPool) Start() {
 	for i := 0; i < p.workersCount; i++ {
 		p.waitGroup.Add(1)
 		worker := newWorker(p.ctx, p.jobs)
@@ -58,7 +58,7 @@ func (p *WPool) Start() {
 }
 
 // Do  worker pool does the job.
-func (p *WPool) Do(makeFunc func()) {
+func (p *wPool) Do(makeFunc func()) {
 	if len(p.jobs) < p.workersCount {
 		p.jobs <- makeFunc
 	}
@@ -82,7 +82,7 @@ func (w *worker) run() {
 }
 
 // Stop workers in pool.
-func (p *WPool) Stop() {
+func (p *wPool) Stop() {
 	p.cancel()
 	p.waitGroup.Wait()
 }

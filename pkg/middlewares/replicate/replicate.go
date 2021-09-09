@@ -26,8 +26,8 @@ type replicate struct {
 	sync.RWMutex
 	next     http.Handler
 	name     string
-	producer Producer
-	wPool    *WPool
+	producer producer
+	wPool    *wPool
 }
 
 // New creates a new http handler.
@@ -38,7 +38,7 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 		next:     next,
 		name:     middlewareName,
 		producer: nil,
-		wPool:    NewLimitPool(ctx, config.Replicate.WorkerPoolSize),
+		wPool:    newLimitPool(ctx, config.Replicate.WorkerPoolSize),
 	}
 	replicate.wPool.Start()
 
@@ -105,7 +105,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 // StartAlive start regular message sending alive message to kafka for  health checking.
-func StartAlive(ctx context.Context, producer Producer, name string, topic string, duration time.Duration) error {
+func StartAlive(ctx context.Context, producer producer, name string, topic string, duration time.Duration) error {
 	if topic == "" {
 		return errors.New("topic is required")
 	}
@@ -122,7 +122,7 @@ func (r *replicate) connectProducer(ctx context.Context, config *runtime.Middlew
 			Fatal(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
 		return
 	}
-	producer.SyncProducer(ctx)
+	producer.syncProducer(ctx)
 	r.RWMutex.Lock()
 	r.producer = producer
 	r.RWMutex.Unlock()
@@ -133,15 +133,15 @@ func (r *replicate) connectProducer(ctx context.Context, config *runtime.Middlew
 	}
 }
 
-func sendEvent(ctx context.Context, producer Producer, event Event, name string) {
+func sendEvent(ctx context.Context, producer producer, event Event, name string) {
 	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
-	err := producer.Produce(event)
+	err := producer.produce(event)
 	if err != nil {
 		logger.Error(err)
 	}
 }
 
-func sendAlive(ctx context.Context, producer Producer, name string, topic string, duration time.Duration) {
+func sendAlive(ctx context.Context, producer producer, name string, topic string, duration time.Duration) {
 	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
 	logger.Debug("Initial sending alive messages")
 
@@ -158,7 +158,7 @@ func sendAlive(ctx context.Context, producer Producer, name string, topic string
 			if err != nil {
 				logger.Debug(err)
 			}
-			err = producer.ProduceTo(Event{
+			err = producer.produceTo(Event{
 				Host: hostname,
 				Time: time.Now().UTC(),
 			}, topic)
