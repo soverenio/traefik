@@ -44,7 +44,7 @@ type kafkaPublisher struct {
 }
 
 // NewKafkaPublisher create new  KafkaPublisher.
-func NewKafkaPublisher(topic string, brokers []string) (*kafkaPublisher, error) {
+func newKafkaPublisher(topic string, brokers []string) (*kafkaPublisher, error) {
 	if topic == "" {
 		return nil, errors.New("topic is required")
 	}

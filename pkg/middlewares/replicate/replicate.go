@@ -116,7 +116,7 @@ func StartAlive(ctx context.Context, producer producer, name string, topic strin
 }
 
 func (r *replicate) connectProducer(ctx context.Context, config *runtime.MiddlewareInfo, middlewareName string, next http.Handler) {
-	producer, err := NewKafkaPublisher(config.Replicate.Topic, config.Replicate.Brokers)
+	producer, err := newKafkaPublisher(config.Replicate.Topic, config.Replicate.Brokers)
 	if err != nil {
 		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
 			Fatal(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
