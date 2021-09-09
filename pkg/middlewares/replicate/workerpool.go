@@ -25,6 +25,8 @@ type worker struct {
 func NewLimitPool(parentCtx context.Context, poolSize int) *WPool {
 	ctx, cancel := context.WithCancel(parentCtx)
 	if poolSize == 0 {
+		logger := log.FromContext(ctx)
+		logger.Debugf("poolSize equal zero from config, use default pool size %d", defaultPoolSize)
 		poolSize = defaultPoolSize
 	}
 
@@ -46,7 +48,6 @@ func newWorker(ctx context.Context, jobs chan func()) *worker {
 func (p *WPool) Start() {
 	for i := 0; i < p.workersCount; i++ {
 		p.waitGroup.Add(1)
-
 		worker := newWorker(p.ctx, p.jobs)
 
 		go worker.Run()
