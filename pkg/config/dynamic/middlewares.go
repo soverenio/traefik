@@ -509,5 +509,5 @@ type Replicate struct {
 	Topic          string   `json:"topic,omitempty" toml:"topic,omitempty" yaml:"topic,omitempty" export:"true"`
 	AliveTopic     string   `json:"aliveTopic,omitempty" toml:"aliveTopic,omitempty" yaml:"aliveTopic,omitempty" export:"true"`
 	Brokers        []string `json:"brokers,omitempty" toml:"brokers,omitempty" yaml:"brokers,omitempty" export:"true"`
-	WorkerPoolSize int      `json:"brokers,omitempty" toml:"brokers,omitempty" yaml:"brokers,omitempty" export:"true"`
+	WorkerPoolSize int      `json:"poolSize,omitempty" toml:"poolSize,omitempty" yaml:"poolSize,omitempty" export:"true"`
 }
