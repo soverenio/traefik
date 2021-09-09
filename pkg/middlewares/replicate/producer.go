@@ -40,7 +40,7 @@ type producer interface {
 type kafkaPublisher struct {
 	message.Publisher
 	brokers []string
-	Topic   string
+	topic   string
 }
 
 // NewKafkaPublisher create new  KafkaPublisher.
@@ -54,7 +54,7 @@ func newKafkaPublisher(topic string, brokers []string) (*kafkaPublisher, error) 
 
 	return &kafkaPublisher{
 		Publisher: nil,
-		Topic:     topic,
+		topic:     topic,
 		brokers:   brokers,
 	}, nil
 }
@@ -90,7 +90,7 @@ func (p *kafkaPublisher) produce(ev Event) error {
 		logger.Error(err)
 		return err
 	}
-	err = p.Publish(p.Topic, message.NewMessage(watermill.NewUUID(), payload))
+	err = p.Publish(p.topic, message.NewMessage(watermill.NewUUID(), payload))
 	if err != nil {
 		logger.Error(err)
 		return err
