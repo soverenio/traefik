@@ -75,7 +75,7 @@ func TestReplicate(t *testing.T) {
 		assert.Equal(t, recorder.Header().Get(expectedHeader), expectedValue, "header was changed by the middleware")
 	})
 
-	t.Run("Producer error causes Internal Server Error", func(t *testing.T) {
+	t.Run("Producer error causes, but handler return 200", func(t *testing.T) {
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte("body"))
 			require.NoError(t, err)
@@ -96,8 +96,8 @@ func TestReplicate(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, "/test", nil)
 		replicate.ServeHTTP(recorder, request)
 
-		assert.Equal(t, http.StatusInternalServerError, recorder.Code, "status code must be 500")
-		assert.Equal(t, "test-error\n", recorder.Body.String(), "response body must contain an error message")
+		assert.Equal(t, http.StatusOK, recorder.Code, "status code must be 200")
+		assert.Equal(t, "body", recorder.Body.String(), "response body is correct")
 	})
 }
 
