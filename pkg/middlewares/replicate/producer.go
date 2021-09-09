@@ -39,7 +39,7 @@ type KafkaPublisher struct {
 	Topic   string
 }
 
-// NewKafkaPublisher create new  KafkaPublisher
+// NewKafkaPublisher create new  KafkaPublisher.
 func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) {
 	if topic == "" {
 		return nil, errors.New("topic is required")
@@ -55,7 +55,7 @@ func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) 
 	}, nil
 }
 
-// SyncProducer connect to kafka
+// SyncProducer connect to kafka.
 func (p *KafkaPublisher) SyncProducer(ctx context.Context) {
 	logger := log.FromContext(ctx)
 	config := kafka.PublisherConfig{
@@ -78,7 +78,7 @@ func (p *KafkaPublisher) SyncProducer(ctx context.Context) {
 	}
 }
 
-// Produce send event to kafka
+// Produce send event to kafka.
 func (p *KafkaPublisher) Produce(ev Event) error {
 	logger := log.FromContext(context.Background())
 	payload, err := json.Marshal(ev)
@@ -96,7 +96,7 @@ func (p *KafkaPublisher) Produce(ev Event) error {
 	return nil
 }
 
-// ProduceTo send event to kafka in specific topic
+// ProduceTo send event to kafka in specific topic.
 func (p *KafkaPublisher) ProduceTo(ev Event, topic string) error {
 	if topic == "" {
 		return errors.New("topic is required")

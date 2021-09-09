@@ -22,7 +22,7 @@ type worker struct {
 	jobs chan func()
 }
 
-// NewLimitPool create new Worker Pool
+// NewLimitPool create new Worker Pool.
 func NewLimitPool(parentCtx context.Context, poolSize int) *WPool {
 	ctx, cancel := context.WithCancel(parentCtx)
 	if poolSize == 0 {
@@ -46,7 +46,7 @@ func newWorker(ctx context.Context, jobs chan func()) *worker {
 	}
 }
 
-// Start create workers in worker pool and start working
+// Start create workers in worker pool and start working.
 func (p *WPool) Start() {
 	for i := 0; i < p.workersCount; i++ {
 		p.waitGroup.Add(1)
@@ -79,7 +79,7 @@ func (w *worker) run() {
 	}
 }
 
-// Stop workers in pool
+// Stop workers in pool.
 func (p *WPool) Stop() {
 	p.cancel()
 	p.waitGroup.Wait()

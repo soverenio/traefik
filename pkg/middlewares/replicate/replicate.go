@@ -21,7 +21,7 @@ const (
 	typeName = "Replicate"
 )
 
-// replicate is a middleware used to send copies of requests and responses to an arbitrary service
+// replicate is a middleware used to send copies of requests and responses to an arbitrary service.
 type replicate struct {
 	sync.RWMutex
 	next     http.Handler
@@ -104,7 +104,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	})
 }
 
-// StartAlive start regular message sending alive message to kafka for  health checking
+// StartAlive start regular message sending alive message to kafka for  health checking.
 func StartAlive(ctx context.Context, producer Producer, name string, topic string, duration time.Duration) error {
 	if topic == "" {
 		return errors.New("topic is required")
@@ -133,7 +133,6 @@ func (r *replicate) connectProducer(ctx context.Context, config *runtime.Middlew
 	}
 }
 
-// sendEvent send event in producer
 func sendEvent(ctx context.Context, producer Producer, event Event, name string) {
 	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
 	err := producer.Produce(event)
