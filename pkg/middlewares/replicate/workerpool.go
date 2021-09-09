@@ -7,7 +7,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/log"
 )
 
-const defaultPoolSize = 10000
+const defaultPoolSize = 10
 
 type WPool struct {
 	ctx          context.Context

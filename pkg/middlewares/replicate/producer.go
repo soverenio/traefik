@@ -81,12 +81,12 @@ func (p *KafkaPublisher) Produce(ev Event) error {
 	logger := log.FromContext(context.Background())
 	payload, err := json.Marshal(ev)
 	if err != nil {
-		logger.Debug(err)
+		logger.Error(err)
 		return err
 	}
 	err = p.Publish(p.Topic, message.NewMessage(watermill.NewUUID(), payload))
 	if err != nil {
-		logger.Debug(err)
+		logger.Error(err)
 		return err
 	}
 	logger.Debug("Send message to kafka")
