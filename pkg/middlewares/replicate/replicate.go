@@ -81,11 +81,12 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	r.RWMutex.RLock()
+	defer r.RWMutex.RUnlock()
 	if r.producer == nil {
 		logger.Warn("Connect to kafka failed")
 		return
 	}
-	r.RWMutex.RUnlock()
+
 	r.wPool.Do(func() {
 		sendEvent(ctx, r.producer, Event{
 			Method: method,
@@ -123,11 +124,10 @@ func (r *replicate) connectProducer(ctx context.Context, config *runtime.Middlew
 			Fatal(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
 		return
 	}
-	r.RWMutex.Lock()
 	producer.SyncProducer(ctx)
-	r.RWMutex.Unlock()
+	r.RWMutex.Lock()
 	r.producer = producer
-
+	r.RWMutex.Unlock()
 	err = StartAlive(ctx, r.producer, middlewareName, config.Replicate.AliveTopic, time.Second*10)
 	if err != nil {
 		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
