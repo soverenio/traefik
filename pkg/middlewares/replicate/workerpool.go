@@ -7,6 +7,8 @@ import (
 	"github.com/traefik/traefik/v2/pkg/log"
 )
 
+const defaultPoolSize = 10000
+
 type WPool struct {
 	ctx          context.Context
 	waitGroup    sync.WaitGroup
@@ -22,6 +24,10 @@ type worker struct {
 
 func NewLimitPool(parentCtx context.Context, poolSize int) *WPool {
 	ctx, cancel := context.WithCancel(parentCtx)
+	if poolSize == 0 {
+		poolSize = defaultPoolSize
+	}
+
 	return &WPool{
 		ctx:          ctx,
 		workersCount: poolSize,

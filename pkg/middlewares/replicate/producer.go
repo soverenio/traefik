@@ -89,8 +89,7 @@ func (p *KafkaPublisher) Produce(ev Event) error {
 		logger.Debug(err)
 		return err
 	}
-	// todo delete this
-	logger.Info("Send message to kafka")
+	logger.Debug("Send message to kafka")
 
 	return nil
 }

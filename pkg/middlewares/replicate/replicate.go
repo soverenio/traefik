@@ -40,8 +40,7 @@ func New(ctx context.Context, config *runtime.MiddlewareInfo, middlewareName str
 		name:     middlewareName,
 		config:   config,
 		producer: nil,
-		// todo poolSize to config
-		wPool: NewLimitPool(ctx, 100),
+		wPool:    NewLimitPool(ctx, config.Replicate.WorkerPoolSize),
 	}
 	replicate.wPool.Start()
 
