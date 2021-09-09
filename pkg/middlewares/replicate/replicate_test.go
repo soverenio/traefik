@@ -7,24 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestNewReplicate(t *testing.T) {
-	t.Run("Creates an instance with valid params", func(t *testing.T) {
-		next := http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {})
-		producer := MockProducer(func(event Event) error { return nil })
-		name := "test-replicate"
-
-		handler, err := New(context.Background(), next, producer, name)
-		assert.NoError(t, err)
-		assert.NotNil(t, handler)
-	})
-}
 
 func TestReplicate(t *testing.T) {
 	t.Run("The middleware doesn't affect on request and response", func(t *testing.T) {
@@ -67,8 +56,14 @@ func TestReplicate(t *testing.T) {
 			assert.Equal(t, expectedEvent, event)
 			return nil
 		})
-		replicate, err := New(context.Background(), next, producer, "test-replicate")
-		require.NoError(t, err)
+		ctx := context.Background()
+		replicate := replicate{
+			RWMutex:  sync.RWMutex{},
+			next:     next,
+			name:     "test-replicate",
+			producer: producer,
+			wPool:    newLimitPool(ctx, defaultPoolSize),
+		}
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
 		recorder := httptest.NewRecorder()
@@ -80,7 +75,7 @@ func TestReplicate(t *testing.T) {
 		assert.Equal(t, recorder.Header().Get(expectedHeader), expectedValue, "header was changed by the middleware")
 	})
 
-	t.Run("Producer error causes Internal Server Error", func(t *testing.T) {
+	t.Run("Producer error causes, but handler return 200", func(t *testing.T) {
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte("body"))
 			require.NoError(t, err)
@@ -89,15 +84,20 @@ func TestReplicate(t *testing.T) {
 			return errors.New("test-error")
 		})
 
-		replicate, err := New(context.Background(), next, producer, "test-replicate")
-		require.NoError(t, err)
-
+		ctx := context.Background()
+		replicate := replicate{
+			RWMutex:  sync.RWMutex{},
+			next:     next,
+			name:     "test-replicate",
+			producer: producer,
+			wPool:    newLimitPool(ctx, defaultPoolSize),
+		}
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/test", nil)
 		replicate.ServeHTTP(recorder, request)
 
-		assert.Equal(t, http.StatusInternalServerError, recorder.Code, "status code must be 500")
-		assert.Equal(t, "test-error\n", recorder.Body.String(), "response body must contain an error message")
+		assert.Equal(t, http.StatusOK, recorder.Code, "status code must be 200")
+		assert.Equal(t, "body", recorder.Body.String(), "response body is correct")
 	})
 }
 
@@ -125,10 +125,10 @@ func TestAlive(t *testing.T) {
 
 type MockProducer func(Event) error
 
-func (m MockProducer) Produce(ev Event) error {
+func (m MockProducer) produce(ev Event) error {
 	return m(ev)
 }
 
-func (m MockProducer) ProduceTo(ev Event, topic string) error {
+func (m MockProducer) produceTo(ev Event, topic string) error {
 	return m(ev)
 }

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/containous/alice"
+
 	"github.com/traefik/traefik/v2/pkg/config/runtime"
 	"github.com/traefik/traefik/v2/pkg/middlewares/addprefix"
 	"github.com/traefik/traefik/v2/pkg/middlewares/auth"
@@ -344,20 +344,8 @@ func (b *Builder) buildConstructor(ctx context.Context, middlewareName string) (
 	// Replicate
 	if config.Replicate != nil {
 		middleware = func(next http.Handler) (http.Handler, error) {
-			producer, err := replicate.NewKafkaPublisher(config.Replicate.Topic, config.Replicate.Brokers)
 			// todo find the correct way to close the producer (producer.Close())
-			if err != nil {
-				noOpHandler := http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {})
-				err = errors.New(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
-				return noOpHandler, err
-			}
-			err = replicate.StartAlive(ctx, producer, middlewareName, config.Replicate.AliveTopic, time.Second*10)
-			if err != nil {
-				noOpHandler := http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {})
-				err = errors.New(strings.Join([]string{"Replicate: failed to start sending alive messages", err.Error()}, ": "))
-				return noOpHandler, err
-			}
-			return replicate.New(ctx, next, producer, middlewareName)
+			return replicate.New(ctx, next, config, middlewareName), nil
 		}
 	}
 
