@@ -30,13 +30,13 @@ type Payload struct {
 	Headers map[string][]string `json:"headers"`
 }
 
-// Interface for send message in message brokers.
+// Producer is interface for send message in message brokers.
 type Producer interface {
 	Produce(event Event) error
 	ProduceTo(event Event, topic string) error
 }
 
-// Publisher publisher for kafka.
+// KafkaPublisher publisher for kafka.
 type KafkaPublisher struct {
 	message.Publisher
 	brokers []string

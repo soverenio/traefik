@@ -63,6 +63,7 @@ func (p *WPool) Do(makeFunc func()) {
 		p.jobs <- makeFunc
 	}
 }
+
 func (w *worker) run() {
 	for {
 		select {
