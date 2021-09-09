@@ -9,6 +9,7 @@ import (
 
 const defaultPoolSize = 10
 
+// WPool is  pool of workers with limit of workers.
 type WPool struct {
 	ctx          context.Context
 	waitGroup    sync.WaitGroup
@@ -56,7 +57,7 @@ func (p *WPool) Start() {
 	}
 }
 
-// Do  worker pool does the job
+// Do  worker pool does the job.
 func (p *WPool) Do(makeFunc func()) {
 	if len(p.jobs) < p.workersCount {
 		p.jobs <- makeFunc

@@ -13,6 +13,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/log"
 )
 
+// Event is message with info about request and response.This message send to kafka.
 type Event struct {
 	Method   string    `json:"method"`
 	URL      string    `json:"url"`
@@ -23,16 +24,19 @@ type Event struct {
 	Time     time.Time `json:"time"`
 }
 
+// Payload body and headers of  request and response.
 type Payload struct {
 	Body    string              `json:"body"`
 	Headers map[string][]string `json:"headers"`
 }
 
+// Interface for send message in message brokers.
 type Producer interface {
 	Produce(event Event) error
 	ProduceTo(event Event, topic string) error
 }
 
+// Publisher publisher for kafka.
 type KafkaPublisher struct {
 	message.Publisher
 	brokers []string
