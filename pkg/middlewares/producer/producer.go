@@ -9,7 +9,6 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
-
 	"github.com/traefik/traefik/v2/pkg/log"
 )
 
@@ -37,14 +36,14 @@ type Producer interface {
 }
 
 // KafkaPublisher publisher for kafka.
-type kafkaPublisher struct {
+type KafkaPublisher struct {
 	message.Publisher
 	brokers []string
 	topic   string
 }
 
 // NewKafkaPublisher create new KafkaPublisher.
-func NewKafkaPublisher(topic string, brokers []string) (*kafkaPublisher, error) {
+func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) {
 	if topic == "" {
 		return nil, errors.New("topic is required")
 	}
@@ -52,7 +51,7 @@ func NewKafkaPublisher(topic string, brokers []string) (*kafkaPublisher, error) 
 		return nil, errors.New("at least one broker is required")
 	}
 
-	return &kafkaPublisher{
+	return &KafkaPublisher{
 		Publisher: nil,
 		topic:     topic,
 		brokers:   brokers,
@@ -60,7 +59,7 @@ func NewKafkaPublisher(topic string, brokers []string) (*kafkaPublisher, error) 
 }
 
 // Connect to kafka.
-func (p *kafkaPublisher) Connect(ctx context.Context) {
+func (p *KafkaPublisher) Connect(ctx context.Context) {
 	logger := log.FromContext(ctx)
 	config := kafka.PublisherConfig{
 		Brokers:   p.brokers,
@@ -83,12 +82,12 @@ func (p *kafkaPublisher) Connect(ctx context.Context) {
 }
 
 // Produce send event to kafka.
-func (p *kafkaPublisher) Produce(ev Event) error {
+func (p *KafkaPublisher) Produce(ev Event) error {
 	return p.ProduceTo(ev, p.topic)
 }
 
 // ProduceTo send event to kafka in specific topic.
-func (p *kafkaPublisher) ProduceTo(ev Event, topic string) error {
+func (p *KafkaPublisher) ProduceTo(ev Event, topic string) error {
 	if topic == "" {
 		return errors.New("topic is required")
 	}
