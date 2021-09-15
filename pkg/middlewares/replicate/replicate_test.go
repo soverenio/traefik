@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/soverenio/traefik/pkg/middlewares/producer"
+	"github.com/traefik/traefik/v2/pkg/middlewares/producer"
 )
 
 func TestReplicate(t *testing.T) {
