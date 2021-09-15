@@ -13,6 +13,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/soverenio/traefik/pkg/middlewares/producer"
 )
 
 func TestReplicate(t *testing.T) {
@@ -22,16 +24,16 @@ func TestReplicate(t *testing.T) {
 		expectedBody := `{"key": "value"}`
 		expectedHeader := "X-Header"
 		expectedValue := "header value"
-		expectedEvent := Event{
+		expectedEvent := producer.Event{
 			Method: method,
 			URL:    URL,
 			Host:   "example.com",
 			Client: "192.0.2.1:1234",
-			Request: Payload{
+			Request: producer.Payload{
 				Body:    expectedBody,
 				Headers: map[string][]string{},
 			},
-			Response: Payload{
+			Response: producer.Payload{
 				Body:    expectedBody,
 				Headers: map[string][]string{expectedHeader: {expectedValue}},
 			},
@@ -50,7 +52,7 @@ func TestReplicate(t *testing.T) {
 			require.NoError(t, err)
 		})
 
-		producer := MockProducer(func(event Event) error {
+		mockedProducer := MockProducer(func(event producer.Event) error {
 			assert.NotEmpty(t, event.Time)
 			expectedEvent.Time = event.Time
 			assert.Equal(t, expectedEvent, event)
@@ -61,7 +63,7 @@ func TestReplicate(t *testing.T) {
 			RWMutex:  sync.RWMutex{},
 			next:     next,
 			name:     "test-replicate",
-			producer: producer,
+			producer: mockedProducer,
 			wPool:    newLimitPool(ctx, defaultPoolSize),
 		}
 
@@ -80,7 +82,7 @@ func TestReplicate(t *testing.T) {
 			_, err := w.Write([]byte("body"))
 			require.NoError(t, err)
 		})
-		producer := MockProducer(func(event Event) error {
+		mockedProducer := MockProducer(func(event producer.Event) error {
 			return errors.New("test-error")
 		})
 
@@ -89,7 +91,7 @@ func TestReplicate(t *testing.T) {
 			RWMutex:  sync.RWMutex{},
 			next:     next,
 			name:     "test-replicate",
-			producer: producer,
+			producer: mockedProducer,
 			wPool:    newLimitPool(ctx, defaultPoolSize),
 		}
 		recorder := httptest.NewRecorder()
@@ -104,7 +106,7 @@ func TestReplicate(t *testing.T) {
 func TestAlive(t *testing.T) {
 	t.Run("Alive message send", func(t *testing.T) {
 		var calls int
-		producer := MockProducer(func(event Event) error {
+		producer := MockProducer(func(event producer.Event) error {
 			assert.NotEmpty(t, event.Time)
 			assert.NotEmpty(t, event.Host)
 			calls++
@@ -123,12 +125,12 @@ func TestAlive(t *testing.T) {
 	})
 }
 
-type MockProducer func(Event) error
+type MockProducer func(producer.Event) error
 
-func (m MockProducer) produce(ev Event) error {
+func (m MockProducer) Produce(ev producer.Event) error {
 	return m(ev)
 }
 
-func (m MockProducer) produceTo(ev Event, topic string) error {
+func (m MockProducer) ProduceTo(ev producer.Event, topic string) error {
 	return m(ev)
 }
