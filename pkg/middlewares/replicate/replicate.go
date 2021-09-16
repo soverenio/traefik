@@ -14,7 +14,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/config/runtime"
 	"github.com/traefik/traefik/v2/pkg/log"
 	"github.com/traefik/traefik/v2/pkg/middlewares"
-	"github.com/traefik/traefik/v2/pkg/middlewares/producer"
+	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/producer"
 	"github.com/traefik/traefik/v2/pkg/safe"
 )
 
