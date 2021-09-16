@@ -1,4 +1,4 @@
-package replicate
+package producer
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
-
 	"github.com/traefik/traefik/v2/pkg/log"
 )
 
@@ -31,20 +30,20 @@ type Payload struct {
 }
 
 // Producer is interface for send message in message brokers.
-type producer interface {
-	produce(event Event) error
-	produceTo(event Event, topic string) error
+type Producer interface {
+	Produce(event Event) error
+	ProduceTo(event Event, topic string) error
 }
 
 // KafkaPublisher publisher for kafka.
-type kafkaPublisher struct {
+type KafkaPublisher struct {
 	message.Publisher
 	brokers []string
 	topic   string
 }
 
-// NewKafkaPublisher create new  KafkaPublisher.
-func newKafkaPublisher(topic string, brokers []string) (*kafkaPublisher, error) {
+// NewKafkaPublisher create new KafkaPublisher.
+func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) {
 	if topic == "" {
 		return nil, errors.New("topic is required")
 	}
@@ -52,15 +51,15 @@ func newKafkaPublisher(topic string, brokers []string) (*kafkaPublisher, error) 
 		return nil, errors.New("at least one broker is required")
 	}
 
-	return &kafkaPublisher{
+	return &KafkaPublisher{
 		Publisher: nil,
 		topic:     topic,
 		brokers:   brokers,
 	}, nil
 }
 
-// SyncProducer connect to kafka.
-func (p *kafkaPublisher) syncProducer(ctx context.Context) {
+// Connect to kafka.
+func (p *KafkaPublisher) Connect(ctx context.Context) {
 	logger := log.FromContext(ctx)
 	config := kafka.PublisherConfig{
 		Brokers:   p.brokers,
@@ -72,7 +71,7 @@ func (p *kafkaPublisher) syncProducer(ctx context.Context) {
 			logger.Info("completing the attempt to connect to kafka")
 			return
 		default:
-			publisher, err := kafka.NewPublisher(config, watermill.NewStdLogger(true, false))
+			publisher, err := kafka.NewPublisher(config, &watermillLogger{Log: logger.WithField("service", "watermill")})
 			if err == nil {
 				p.Publisher = publisher
 				return
@@ -83,32 +82,30 @@ func (p *kafkaPublisher) syncProducer(ctx context.Context) {
 }
 
 // Produce send event to kafka.
-func (p *kafkaPublisher) produce(ev Event) error {
+func (p *KafkaPublisher) Produce(ev Event) error {
+	return p.ProduceTo(ev, p.topic)
+}
+
+// ProduceTo send event to kafka in specific topic.
+func (p *KafkaPublisher) ProduceTo(ev Event, topic string) error {
+	if topic == "" {
+		return errors.New("topic is required")
+	}
 	logger := log.FromContext(context.Background())
 	payload, err := json.Marshal(ev)
 	if err != nil {
 		logger.Error(err)
 		return err
 	}
-	err = p.Publish(p.topic, message.NewMessage(watermill.NewUUID(), payload))
+
+	uuid := watermill.NewUUID()
+	logger = logger.WithField("request_id", uuid)
+	err = p.Publish(topic, message.NewMessage(uuid, payload))
 	if err != nil {
 		logger.Error(err)
 		return err
 	}
-	logger.Debug("Send message to kafka")
+	logger.Debug("Sent message to kafka")
 
 	return nil
-}
-
-// ProduceTo send event to kafka in specific topic.
-func (p *kafkaPublisher) produceTo(ev Event, topic string) error {
-	if topic == "" {
-		return errors.New("topic is required")
-	}
-	payload, err := json.Marshal(ev)
-	if err != nil {
-		return err
-	}
-
-	return p.Publish(topic, message.NewMessage(watermill.NewUUID(), payload))
 }
