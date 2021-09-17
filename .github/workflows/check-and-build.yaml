@@ -68,12 +68,12 @@ jobs:
 
       - name: Build docker image
         run: |
-          docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" -f exp.Dockerfile .
+          docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" -t "${IMAGE_NAME}" -f exp.Dockerfile .
 
       - name: Log into registry
         run: echo "${REGISTRY_PASSWORD}" | docker login -u "${REGISTRY_USERNAME}" --password-stdin
 
       - name: Push docker image
         run: |
-          DIGEST=$(docker push "${IMAGE_NAME}:${IMAGE_TAG}" | awk '/digest/ {print $3}')
+          DIGEST=$(docker push -a "${IMAGE_NAME}" | awk '/digest/ {print $3}')
           echo "DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
