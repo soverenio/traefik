@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/containous/alice"
-
 	"github.com/traefik/traefik/v2/pkg/config/runtime"
 	"github.com/traefik/traefik/v2/pkg/middlewares/addprefix"
 	"github.com/traefik/traefik/v2/pkg/middlewares/auth"
