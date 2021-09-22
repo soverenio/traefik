@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -56,7 +58,13 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	method := req.Method
 	URL := req.URL.String()
 	host := req.Host
-	remoteAddr := req.RemoteAddr
+
+	remoteAddr, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		logger.Warn(err, "invalid remote address: ", req.RemoteAddr)
+		remoteAddr = req.RemoteAddr
+	}
+
 	requestHeaders := req.Header
 
 	requestBody, err := ioutil.ReadAll(body)
