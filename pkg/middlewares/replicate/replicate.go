@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -57,7 +58,13 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	method := req.Method
 	URL := req.URL.String()
 	host := req.Host
-	remoteAddr := req.RemoteAddr
+
+	remoteAddr, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		logger.Warn(err, "invalid remote address: ", req.RemoteAddr)
+		remoteAddr = req.RemoteAddr
+	}
+
 	requestHeaders := req.Header
 
 	requestBody, err := ioutil.ReadAll(body)
@@ -85,24 +92,27 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		logger.Warn("Connect to kafka failed")
 		return
 	}
+	ev := producer.Event{
+		Method: method,
+		URL:    URL,
+		Host:   host,
+		Client: remoteAddr,
+		Request: producer.Payload{
+			Body:    string(requestBody),
+			Headers: requestHeaders,
+		},
+		Response: producer.Payload{
+			Body:    string(responseBody),
+			Headers: responseHeaders,
+		},
+		Time: time.Now().UTC(),
+	}
 
-	r.wPool.Do(func() {
-		sendEvent(ctx, r.producer, producer.Event{
-			Method: method,
-			URL:    URL,
-			Host:   host,
-			Client: remoteAddr,
-			Request: producer.Payload{
-				Body:    string(requestBody),
-				Headers: requestHeaders,
-			},
-			Response: producer.Payload{
-				Body:    string(responseBody),
-				Headers: responseHeaders,
-			},
-			Time: time.Now().UTC(),
-		}, r.name)
-	})
+	if isVerifyEvent(ev) {
+		r.wPool.Do(func() {
+			sendEvent(ctx, r.producer, ev, r.name)
+		})
+	}
 }
 
 // StartAlive start regular message sending alive message to kafka for  health checking.
@@ -168,4 +178,8 @@ func sendAlive(ctx context.Context, p producer.Producer, name string, topic stri
 			}
 		}
 	}
+}
+
+func isVerifyEvent(ev producer.Event) bool {
+	return ev.Host != "" && ev.Client != ""
 }
