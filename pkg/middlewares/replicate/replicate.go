@@ -51,13 +51,6 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	ctx := context.Background()
 	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, r.name, typeName))
-	recorder := newResponseRecorder(rw)
-
-	if ct := req.Header.Get("Content-Type"); ct != "application/json" {
-		logger.Debug("invalid request header 'Content-Type`: ", ct)
-		r.next.ServeHTTP(recorder, req)
-		return
-	}
 
 	body := req.Body
 	defer body.Close()
@@ -82,6 +75,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	req.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
 
+	recorder := newResponseRecorder(rw)
 	r.next.ServeHTTP(recorder, req)
 	responseBody := recorder.GetBody().Bytes()
 	responseHeaders := recorder.Header()
@@ -92,6 +86,12 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if ct := requestHeaders.Get("Content-Type"); ct != "application/json" {
+		logger.Debug("unexpected request header 'Content-Type`: ", ct)
+		return
+	}
+
 	r.RWMutex.RLock()
 	defer r.RWMutex.RUnlock()
 	if r.producer == nil {
