@@ -8,7 +8,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/log"
 )
 
-// DefaultPoolSize is a default pool size
+// DefaultPoolSize is a default pool size.
 const DefaultPoolSize = 10
 
 // WorkerPool is a pool of workers with limit of workers.

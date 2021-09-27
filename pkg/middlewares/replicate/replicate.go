@@ -24,11 +24,6 @@ const (
 	typeName = "Replicate"
 )
 
-type WorkerPool interface {
-	Start()
-	Do(func())
-}
-
 // replicate is a middleware used to send copies of requests and responses to an arbitrary service.
 type replicate struct {
 	sync.RWMutex
