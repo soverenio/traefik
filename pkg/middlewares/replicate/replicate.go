@@ -35,7 +35,7 @@ type replicate struct {
 	next     http.Handler
 	name     string
 	producer producer.Producer
-	wPool    WorkerPool
+	wPool    *utils.WorkerPool
 }
 
 // New creates a new http handler.
