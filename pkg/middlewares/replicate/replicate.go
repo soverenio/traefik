@@ -88,7 +88,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	if ct := requestHeaders.Get("Content-Type"); ct != "application/json" {
-		logger.Debug("unexpected request header 'Content-Type`: ", ct)
+		logger.Debug("ignoring requests with header 'Content-Type' not 'application/json'")
 		return
 	}
 
