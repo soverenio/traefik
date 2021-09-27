@@ -74,7 +74,7 @@ func (p *wPool) Stop() {
 	// stop taking new jobs and drop existing buffered jobs
 	close(p.jobs)
 
-	// if functions inside wPool honours context cancel - give them a 'hint'
+	// if functions inside wPool honors context cancel - give them a 'hint'
 	p.cancel()
 
 	// wait until all currently running jobs are processed
