@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	typeName = "Replicate"
+	typeName      = "Replicate"
+	emptyJSONBody = "{}"
 )
 
 // replicate is a middleware used to send copies of requests and responses to an arbitrary service.
@@ -87,9 +88,20 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if ct := requestHeaders.Get("Content-Type"); ct != "application/json" {
-		logger.Debug("ignoring requests with header 'Content-Type' not 'application/json'")
-		return
+	var eventRequestBody, eventResponseBody string
+
+	if ct := requestHeaders.Get("Content-Type"); ct == "application/json" {
+		eventRequestBody = string(requestBody)
+	} else {
+		logger.Debug("ignoring requests with header 'Content-Type' not 'application/json', setting Event.Request to '{}'")
+		eventRequestBody = emptyJSONBody
+	}
+
+	if ct := responseHeaders.Get("Content-Type"); ct == "application/json" {
+		eventResponseBody = string(responseBody)
+	} else {
+		logger.Debug("ignoring responses with header 'Content-Type' not 'application/json', setting Event.Response to '{}'")
+		eventResponseBody = emptyJSONBody
 	}
 
 	r.RWMutex.RLock()
@@ -104,11 +116,11 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		Host:   host,
 		Client: remoteAddr,
 		Request: producer.Payload{
-			Body:    string(requestBody),
+			Body:    eventRequestBody,
 			Headers: requestHeaders,
 		},
 		Response: producer.Payload{
-			Body:    string(responseBody),
+			Body:    eventResponseBody,
 			Headers: responseHeaders,
 		},
 		Time: time.Now().UTC(),

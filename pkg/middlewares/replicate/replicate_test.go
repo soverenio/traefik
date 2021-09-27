@@ -111,8 +111,7 @@ func TestReplicate(t *testing.T) {
 			RWMutex: sync.RWMutex{},
 			next:    next,
 			name:    "test-replicate",
-			// producer: mockedProducer,
-			wPool: newLimitPool(ctx, defaultPoolSize),
+			wPool:   newLimitPool(ctx, defaultPoolSize),
 		}
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
