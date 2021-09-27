@@ -2,6 +2,7 @@ package replicate
 
 import (
 	"context"
+	"strconv"
 	"sync"
 
 	"github.com/traefik/traefik/v2/pkg/log"
@@ -9,7 +10,7 @@ import (
 
 const defaultPoolSize = 10
 
-// WPool is  pool of workers with limit of workers.
+// WPool is a pool of workers with limit of workers.
 type wPool struct {
 	ctx          context.Context
 	waitGroup    sync.WaitGroup
@@ -18,9 +19,17 @@ type wPool struct {
 	cancel       context.CancelFunc
 }
 
-type worker struct {
-	ctx  context.Context
-	jobs chan func()
+func (p *wPool) workerLoop(ctx context.Context) {
+	defer p.waitGroup.Done()
+
+	for {
+		jobFunc, ok := <-p.jobs
+		if !ok { // that means channel is closed, stopping processing messages
+			log.FromContext(ctx).Debug("stopping worker from worker pool")
+			return
+		}
+		jobFunc()
+	}
 }
 
 // NewLimitPool create new Worker Pool.
@@ -40,49 +49,34 @@ func newLimitPool(parentCtx context.Context, poolSize int) *wPool {
 	}
 }
 
-func newWorker(ctx context.Context, jobs chan func()) *worker {
-	return &worker{
-		ctx:  ctx,
-		jobs: jobs,
-	}
-}
-
 // Start create workers in worker pool and start working.
 func (p *wPool) Start() {
-	for i := 0; i < p.workersCount; i++ {
-		p.waitGroup.Add(1)
-		worker := newWorker(p.ctx, p.jobs)
+	p.waitGroup.Add(p.workersCount)
 
-		go worker.run()
+	for i := 0; i < p.workersCount; i++ {
+		ctx := log.With(p.ctx, log.Str("worker", strconv.Itoa(i)))
+
+		go p.workerLoop(ctx)
 	}
 }
 
 // Do  worker pool does the job.
 func (p *wPool) Do(makeFunc func()) {
-	if len(p.jobs) < p.workersCount {
-		p.jobs <- makeFunc
-	}
-}
-
-func (w *worker) run() {
-	for {
-		select {
-		case jobFunc, ok := <-w.jobs:
-			if !ok {
-				continue
-			}
-			jobFunc()
-
-		case <-w.ctx.Done():
-			logger := log.FromContext(w.ctx)
-			logger.Debug("Stopping worker from worker pool")
-			return
-		}
+	select {
+	case p.jobs <- makeFunc:
+	default:
+		// do nothing in case we're overbooked
 	}
 }
 
 // Stop workers in pool.
 func (p *wPool) Stop() {
+	// stop taking new jobs and drop existing buffered jobs
+	close(p.jobs)
+
+	// if functions inside wPool honours context cancel - give them a 'hint'
 	p.cancel()
+
+	// wait until all currently running jobs are processed
 	p.waitGroup.Wait()
 }
