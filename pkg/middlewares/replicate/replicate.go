@@ -183,7 +183,7 @@ func sendAlive(ctx context.Context, p producer.Producer, name string, topic stri
 				Time: time.Now().UTC(),
 			}, topic)
 			if err != nil {
-				logger.Debug(err)
+				logger.Warn(err)
 			}
 		}
 	}

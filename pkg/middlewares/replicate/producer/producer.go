@@ -94,7 +94,6 @@ func (p *KafkaPublisher) ProduceTo(ev Event, topic string) error {
 	logger := log.FromContext(context.Background())
 	payload, err := json.Marshal(ev)
 	if err != nil {
-		logger.Warn(err)
 		return err
 	}
 
@@ -102,7 +101,6 @@ func (p *KafkaPublisher) ProduceTo(ev Event, topic string) error {
 	logger = logger.WithField("request_id", uuid)
 	err = p.Publish(topic, message.NewMessage(uuid, payload))
 	if err != nil {
-		logger.Warn(err)
 		return err
 	}
 
