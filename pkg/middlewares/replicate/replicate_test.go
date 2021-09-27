@@ -71,6 +71,7 @@ func TestReplicate(t *testing.T) {
 			producer: mockedProducer,
 			wPool:    newLimitPool(ctx, defaultPoolSize),
 		}
+		replicate.wPool.Start()
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
 		request.Header = headers
@@ -113,6 +114,7 @@ func TestReplicate(t *testing.T) {
 			name:    "test-replicate",
 			wPool:   newLimitPool(ctx, defaultPoolSize),
 		}
+		replicate.wPool.Start()
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
 		request.Header = headers
@@ -142,6 +144,8 @@ func TestReplicate(t *testing.T) {
 			producer: mockedProducer,
 			wPool:    newLimitPool(ctx, defaultPoolSize),
 		}
+		replicate.wPool.Start()
+
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/test", nil)
 		replicate.ServeHTTP(recorder, request)
