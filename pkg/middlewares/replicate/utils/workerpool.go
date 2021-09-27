@@ -8,7 +8,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/log"
 )
 
-const defaultPoolSize = 10
+const DefaultPoolSize = 10
 
 // WorkerPool is a pool of workers with limit of workers.
 type WorkerPool struct {
@@ -37,14 +37,14 @@ func NewLimitPool(parentCtx context.Context, poolSize int) *WorkerPool {
 	ctx, cancel := context.WithCancel(parentCtx)
 	if poolSize == 0 {
 		logger := log.FromContext(ctx)
-		logger.Debugf("poolSize equal zero from config, use default pool size %d", defaultPoolSize)
-		poolSize = defaultPoolSize
+		logger.Debugf("poolSize equal zero from config, use default pool size %d", DefaultPoolSize)
+		poolSize = DefaultPoolSize
 	}
 
 	return &WorkerPool{
 		ctx:         ctx,
 		workerCount: poolSize,
-		jobs:        newSyncWriteQueue(defaultPoolSize),
+		jobs:        newSyncWriteQueue(DefaultPoolSize),
 		cancel:      cancel,
 	}
 }
@@ -55,7 +55,6 @@ func (p *WorkerPool) Start() {
 
 	for i := 0; i < p.workerCount; i++ {
 		ctx := log.With(p.ctx, log.Str("worker", strconv.Itoa(i)))
-
 		go p.workerLoop(ctx)
 	}
 }

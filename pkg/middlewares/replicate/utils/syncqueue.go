@@ -15,8 +15,8 @@ type syncWriteQueue struct {
 
 // Enqueue appends element to queue (in case it isn't closed)
 // it won't enqueue in case:
-// 1. queue is overbooked
-// 2. we've already closed queue
+// 1. queue is overbooked.
+// 2. we've already closed queue.
 func (s *syncWriteQueue) Enqueue(job func()) {
 	s.writeMutex.RLock()
 	defer s.writeMutex.RUnlock()
@@ -44,11 +44,11 @@ func (s *syncWriteQueue) ReadQueue() <-chan func() {
 	return s.queue
 }
 
-func newSyncWriteQueue(len int) *syncWriteQueue {
-	if len < 1 {
+func newSyncWriteQueue(queueLength int) *syncWriteQueue {
+	if queueLength < 1 {
 		panic("illegal value")
 	}
 	return &syncWriteQueue{
-		queue: make(chan func(), len),
+		queue: make(chan func(), queueLength),
 	}
 }
