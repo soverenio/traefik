@@ -16,6 +16,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/log"
 	"github.com/traefik/traefik/v2/pkg/middlewares"
 	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/producer"
+	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/utils"
 	"github.com/traefik/traefik/v2/pkg/safe"
 )
 
@@ -23,13 +24,18 @@ const (
 	typeName = "Replicate"
 )
 
+type WorkerPool interface {
+	Start()
+	Do(func())
+}
+
 // replicate is a middleware used to send copies of requests and responses to an arbitrary service.
 type replicate struct {
 	sync.RWMutex
 	next     http.Handler
 	name     string
 	producer producer.Producer
-	wPool    *wPool
+	wPool    WorkerPool
 }
 
 // New creates a new http handler.
@@ -41,7 +47,7 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 		next:     next,
 		name:     middlewareName,
 		producer: nil,
-		wPool:    newLimitPool(ctx, config.Replicate.WorkerPoolSize),
+		wPool:    utils.NewLimitPool(ctx, config.Replicate.WorkerPoolSize),
 	}
 	replicate.wPool.Start()
 

@@ -63,7 +63,7 @@ func TestReplicate(t *testing.T) {
 			next:     next,
 			name:     "test-replicate",
 			producer: mockedProducer,
-			wPool:    newLimitPool(ctx, defaultPoolSize),
+			wPool:    utils.newLimitPool(ctx, utils.defaultPoolSize),
 		}
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
@@ -91,7 +91,7 @@ func TestReplicate(t *testing.T) {
 			next:     next,
 			name:     "test-replicate",
 			producer: mockedProducer,
-			wPool:    newLimitPool(ctx, defaultPoolSize),
+			wPool:    utils.newLimitPool(ctx, utils.defaultPoolSize),
 		}
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/test", nil)
