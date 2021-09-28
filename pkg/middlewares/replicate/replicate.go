@@ -90,9 +90,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var (
-		eventRequest, eventResponse producer.Payload
-	)
+	var eventRequest, eventResponse producer.Payload
 
 	if ct := requestHeaders.Get("Content-Type"); ct == "application/json" {
 		eventRequest = producer.Payload{
