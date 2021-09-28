@@ -21,7 +21,8 @@ import (
 )
 
 const (
-	typeName = "Replicate"
+	typeName      = "Replicate"
+	emptyJSONBody = "{}"
 )
 
 // replicate is a middleware used to send copies of requests and responses to an arbitrary service.
@@ -89,6 +90,34 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	var eventRequest, eventResponse producer.Payload
+
+	if ct := requestHeaders.Get("Content-Type"); ct == "application/json" {
+		eventRequest = producer.Payload{
+			Body:    string(requestBody),
+			Headers: requestHeaders,
+		}
+	} else {
+		logger.Debug("ignoring requests with header 'Content-Type' not 'application/json', setting Event.Request to '{}'")
+		eventRequest = producer.Payload{
+			Body:    emptyJSONBody,
+			Headers: map[string][]string{},
+		}
+	}
+
+	if ct := responseHeaders.Get("Content-Type"); ct == "application/json" {
+		eventResponse = producer.Payload{
+			Body:    string(responseBody),
+			Headers: responseHeaders,
+		}
+	} else {
+		logger.Debug("ignoring responses with header 'Content-Type' not 'application/json', setting Event.Response to '{}'")
+		eventResponse = producer.Payload{
+			Body:    emptyJSONBody,
+			Headers: map[string][]string{},
+		}
+	}
+
 	r.wPool.Do(func() {
 		r.RWMutex.RLock()
 		producerInstance := r.producer
@@ -100,19 +129,13 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		}
 
 		ev := producer.Event{
-			Method: method,
-			URL:    URL,
-			Host:   host,
-			Client: remoteAddr,
-			Request: producer.Payload{
-				Body:    string(requestBody),
-				Headers: requestHeaders,
-			},
-			Response: producer.Payload{
-				Body:    string(responseBody),
-				Headers: responseHeaders,
-			},
-			Time: time.Now().UTC(),
+			Method:   method,
+			URL:      URL,
+			Host:     host,
+			Client:   remoteAddr,
+			Request:  eventRequest,
+			Response: eventResponse,
+			Time:     time.Now().UTC(),
 		}
 
 		if !isVerifyEvent(ev) {
