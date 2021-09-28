@@ -510,4 +510,5 @@ type Replicate struct {
 	AliveTopic     string   `json:"aliveTopic,omitempty" toml:"aliveTopic,omitempty" yaml:"aliveTopic,omitempty" export:"true"`
 	WorkerPoolSize int      `json:"poolSize,omitempty" toml:"poolSize,omitempty" yaml:"poolSize,omitempty" export:"true"`
 	Brokers        []string `json:"brokers,omitempty" toml:"brokers,omitempty" yaml:"brokers,omitempty" export:"true"`
+	MaxPayloadSize int      `json:"maxPayloadSize,omitempty" toml:"maxPayloadSize,omitempty" yaml:"maxPayloadSize,omitempty" export:"true"`
 }

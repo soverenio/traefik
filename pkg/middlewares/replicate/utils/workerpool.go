@@ -24,7 +24,12 @@ func (p *WorkerPool) workerLoop(ctx context.Context) {
 	defer p.workerWaitGroup.Done()
 
 	for {
-		jobFunc, ok := <-p.jobs.ReadQueue()
+		queue := p.jobs.ReadQueue()
+		if queue == nil { // that means channel was closed, stopping processing messages
+			log.FromContext(ctx).Debug("stopping worker from worker pool")
+			return
+		}
+		jobFunc, ok := <-queue
 		if !ok { // that means channel is closed, stopping processing messages
 			log.FromContext(ctx).Debug("stopping worker from worker pool")
 			return

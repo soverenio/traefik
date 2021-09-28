@@ -21,17 +21,19 @@ import (
 )
 
 const (
-	typeName      = "Replicate"
-	emptyJSONBody = "{}"
+	typeName              = "Replicate"
+	emptyJSONBody         = "{}"
+	DefaultMaxPayloadSize = 1000000
 )
 
 // replicate is a middleware used to send copies of requests and responses to an arbitrary service.
 type replicate struct {
 	sync.RWMutex
-	next     http.Handler
-	name     string
-	producer producer.Producer
-	wPool    *utils.WorkerPool
+	next           http.Handler
+	name           string
+	producer       producer.Producer
+	wPool          *utils.WorkerPool
+	maxPayloadSize int
 }
 
 // New creates a new http handler.
@@ -39,11 +41,19 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 	ctx = middlewares.GetLoggerCtx(ctx, middlewareName, typeName)
 	log.FromContext(ctx).Debug("Creating middleware")
 
+	maxPayloadSize := config.Replicate.MaxPayloadSize
+	if maxPayloadSize == 0 {
+		logger := log.FromContext(ctx)
+		logger.Debugf("maxPayloadSize equal zero from config, use default max payload size %d", DefaultMaxPayloadSize)
+		maxPayloadSize = DefaultMaxPayloadSize
+	}
+
 	replicate := &replicate{
-		next:     next,
-		name:     middlewareName,
-		producer: nil,
-		wPool:    utils.NewLimitPool(ctx, config.Replicate.WorkerPoolSize),
+		next:           next,
+		name:           middlewareName,
+		producer:       nil,
+		wPool:          utils.NewLimitPool(ctx, config.Replicate.WorkerPoolSize),
+		maxPayloadSize: maxPayloadSize,
 	}
 	replicate.wPool.Start()
 
@@ -54,6 +64,12 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	ctx := context.Background()
 	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, r.name, typeName))
+
+	if req.ContentLength > int64(r.maxPayloadSize) {
+		logger.Debugf("ignoring requests with too long body: body length is %d", req.ContentLength)
+		r.next.ServeHTTP(rw, req)
+		return
+	}
 
 	body := req.Body
 	defer body.Close()
@@ -90,9 +106,21 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	size := len(requestBody)
+	if size > r.maxPayloadSize {
+		logger.Debugf("ignoring requests with too long body: body length is %d", size)
+		return
+	}
+
+	size = len(responseBody)
+	if size > r.maxPayloadSize {
+		logger.Debugf("ignoring responses with too long body: body length is %d", size)
+		return
+	}
+
 	var eventRequest, eventResponse producer.Payload
 
-	if ct := requestHeaders.Get("Content-Type"); ct == "application/json" {
+	if ct := requestHeaders.Get("Content-Type"); strings.Contains(ct, "application/json") {
 		eventRequest = producer.Payload{
 			Body:    string(requestBody),
 			Headers: requestHeaders,
@@ -105,7 +133,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if ct := responseHeaders.Get("Content-Type"); ct == "application/json" {
+	if ct := responseHeaders.Get("Content-Type"); strings.Contains(ct, "application/json") {
 		eventResponse = producer.Payload{
 			Body:    string(responseBody),
 			Headers: responseHeaders,
