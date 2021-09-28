@@ -71,7 +71,7 @@ func TestReplicate(t *testing.T) {
 			name:           "test-replicate",
 			producer:       mockedProducer,
 			wPool:          utils.NewLimitPool(ctx, utils.DefaultPoolSize),
-			maxPayloadSize: DefaultMaxPayloadSize,
+			maxPayloadSize: defaultMaxPayloadSize,
 		}
 		replicate.wPool.Start()
 		defer replicate.wPool.Stop()
@@ -104,7 +104,7 @@ func TestReplicate(t *testing.T) {
 			name:           "test-replicate",
 			producer:       mockedProducer,
 			wPool:          utils.NewLimitPool(ctx, utils.DefaultPoolSize),
-			maxPayloadSize: DefaultMaxPayloadSize,
+			maxPayloadSize: defaultMaxPayloadSize,
 		}
 		replicate.wPool.Start()
 		defer replicate.wPool.Stop()
@@ -174,7 +174,7 @@ func TestReplicate_skip_request(t *testing.T) {
 		name:           "test-replicate",
 		producer:       mockedProducer,
 		wPool:          utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
-		maxPayloadSize: DefaultMaxPayloadSize,
+		maxPayloadSize: defaultMaxPayloadSize,
 	}
 	replicate.wPool.Start()
 	defer replicate.wPool.Stop()
@@ -246,7 +246,7 @@ func TestReplicate_skip_response(t *testing.T) {
 		name:           "test-replicate",
 		producer:       mockedProducer,
 		wPool:          utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
-		maxPayloadSize: DefaultMaxPayloadSize,
+		maxPayloadSize: defaultMaxPayloadSize,
 	}
 	replicate.wPool.Start()
 	defer replicate.wPool.Stop()

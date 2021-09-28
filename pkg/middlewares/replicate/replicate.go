@@ -23,7 +23,7 @@ import (
 const (
 	typeName              = "Replicate"
 	emptyJSONBody         = "{}"
-	DefaultMaxPayloadSize = 1000000
+	defaultMaxPayloadSize = 1000000
 )
 
 // replicate is a middleware used to send copies of requests and responses to an arbitrary service.
@@ -44,8 +44,8 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 	maxPayloadSize := config.Replicate.MaxPayloadSize
 	if maxPayloadSize == 0 {
 		logger := log.FromContext(ctx)
-		logger.Debugf("maxPayloadSize equal zero from config, use default max payload size %d", DefaultMaxPayloadSize)
-		maxPayloadSize = DefaultMaxPayloadSize
+		logger.Debugf("maxPayloadSize equal zero from config, use default max payload size %d", defaultMaxPayloadSize)
+		maxPayloadSize = defaultMaxPayloadSize
 	}
 
 	replicate := &replicate{
