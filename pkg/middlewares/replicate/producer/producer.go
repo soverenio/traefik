@@ -76,7 +76,7 @@ func (p *KafkaPublisher) Connect(ctx context.Context) {
 				p.Publisher = publisher
 				return
 			}
-			logger.Error("failed to create a producer")
+			logger.Warn("failed to create a producer")
 		}
 	}
 }
@@ -91,21 +91,16 @@ func (p *KafkaPublisher) ProduceTo(ev Event, topic string) error {
 	if topic == "" {
 		return errors.New("topic is required")
 	}
-	logger := log.FromContext(context.Background())
 	payload, err := json.Marshal(ev)
 	if err != nil {
-		logger.Error(err)
 		return err
 	}
 
 	uuid := watermill.NewUUID()
-	logger = logger.WithField("request_id", uuid)
 	err = p.Publish(topic, message.NewMessage(uuid, payload))
 	if err != nil {
-		logger.Error(err)
 		return err
 	}
-	logger.Debug("Sent message to kafka")
 
 	return nil
 }

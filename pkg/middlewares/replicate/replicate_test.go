@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/producer"
+	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/utils"
 )
 
 func TestReplicate(t *testing.T) {
@@ -69,7 +70,7 @@ func TestReplicate(t *testing.T) {
 			next:     next,
 			name:     "test-replicate",
 			producer: mockedProducer,
-			wPool:    newLimitPool(ctx, defaultPoolSize),
+			wPool:    utils.NewLimitPool(ctx, utils.DefaultPoolSize),
 		}
 		replicate.wPool.Start()
 
@@ -102,7 +103,7 @@ func TestReplicate(t *testing.T) {
 			next:     next,
 			name:     "test-replicate",
 			producer: mockedProducer,
-			wPool:    newLimitPool(ctx, defaultPoolSize),
+			wPool:    utils.NewLimitPool(ctx, utils.DefaultPoolSize),
 		}
 		replicate.wPool.Start()
 
@@ -172,7 +173,7 @@ func TestReplicate_skip_request(t *testing.T) {
 		next:     next,
 		name:     "test-replicate",
 		producer: mockedProducer,
-		wPool:    newLimitPool(context.Background(), defaultPoolSize),
+		wPool:    utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
 	}
 	replicate.wPool.Start()
 
@@ -244,7 +245,7 @@ func TestReplicate_skip_response(t *testing.T) {
 		next:     next,
 		name:     "test-replicate",
 		producer: mockedProducer,
-		wPool:    newLimitPool(context.Background(), defaultPoolSize),
+		wPool:    utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
 	}
 	replicate.wPool.Start()
 
