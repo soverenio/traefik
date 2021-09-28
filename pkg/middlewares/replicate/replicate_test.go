@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/producer"
+	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/utils"
 )
 
 func TestReplicate(t *testing.T) {
@@ -63,7 +64,7 @@ func TestReplicate(t *testing.T) {
 			next:     next,
 			name:     "test-replicate",
 			producer: mockedProducer,
-			wPool:    newLimitPool(ctx, defaultPoolSize),
+			wPool:    utils.NewLimitPool(ctx, utils.DefaultPoolSize),
 		}
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
@@ -91,7 +92,7 @@ func TestReplicate(t *testing.T) {
 			next:     next,
 			name:     "test-replicate",
 			producer: mockedProducer,
-			wPool:    newLimitPool(ctx, defaultPoolSize),
+			wPool:    utils.NewLimitPool(ctx, utils.DefaultPoolSize),
 		}
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/test", nil)
