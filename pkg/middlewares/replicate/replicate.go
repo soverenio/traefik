@@ -70,9 +70,8 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		Headers: map[string][]string{},
 	}
 
-	ct := req.Header.Get("Content-Type")
 	switch {
-	case !strings.Contains(ct, "application/json"):
+	case !strings.Contains(req.Header.Get("Content-Type"), "application/json"):
 		logger.Debug("ignoring requests with header 'Content-Type' not 'application/json', setting Event.Request to '{}'")
 	case req.ContentLength > int64(r.maxPayloadSize):
 		logger.Debugf("ignoring requests with too long body: body length is %d", req.ContentLength)
