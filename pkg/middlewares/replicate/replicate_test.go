@@ -364,10 +364,10 @@ func TestReplicate_too_long_body(t *testing.T) {
 		assert.Equal(t, headers[customHeaderKey][0], recorder.Header().Get(customHeaderKey), "response header was changed by the middleware")
 		assert.Equal(t, headers[contentTypeHeaderKey][0], recorder.Header().Get(contentTypeHeaderKey), "response header was changed by the middleware")
 	})
-	t.Run("The middleware ignores too long payload", func(t *testing.T) {
+	t.Run("The middleware ignores too long total body", func(t *testing.T) {
 		URL := "/test"
 		method := http.MethodPost
-		expectedBody := "part of too long payload"
+		expectedBody := "part of too long body"
 		maxProcessableBodySize := len(expectedBody)*2 - 1
 		headers := make(map[string][]string, 2)
 		customHeaderKey := "X-Header"
