@@ -42,9 +42,9 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 	log.FromContext(ctx).Debug("Creating middleware")
 
 	maxPayloadSize := config.Replicate.MaxPayloadSize
-	if maxPayloadSize == 0 {
+	if maxPayloadSize <= 0 {
 		logger := log.FromContext(ctx)
-		logger.Debugf("maxPayloadSize equal zero from config, use default max payload size %d", defaultMaxPayloadSize)
+		logger.Debugf("maxPayloadSize from config equals zero or less, use default max payload size %d", defaultMaxPayloadSize)
 		maxPayloadSize = defaultMaxPayloadSize
 	}
 
