@@ -113,7 +113,6 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			Body:    emptyJSONBody,
 			Headers: map[string][]string{},
 		}
-		requestBody = []byte(emptyJSONBody)
 	}
 
 	if ct := responseHeaders.Get("Content-Type"); strings.Contains(ct, "application/json") {
@@ -127,10 +126,9 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			Body:    emptyJSONBody,
 			Headers: map[string][]string{},
 		}
-		responseBody = []byte(emptyJSONBody)
 	}
 
-	size := len(requestBody) + len(responseBody)
+	size := len(eventRequest.Body) + len(eventResponse.Body)
 	if size > r.maxPayloadSize {
 		logger.Debugf("ignoring requests with too long payload: payload length is %d", size)
 		return
