@@ -65,12 +65,6 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	ctx := context.Background()
 	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, r.name, typeName))
 
-	if req.ContentLength > int64(r.maxPayloadSize) {
-		logger.Debugf("ignoring requests with too long body: body length is %d", req.ContentLength)
-		r.next.ServeHTTP(rw, req)
-		return
-	}
-
 	body := req.Body
 	defer body.Close()
 
@@ -106,18 +100,6 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	size := len(requestBody)
-	if size > r.maxPayloadSize {
-		logger.Debugf("ignoring requests with too long body: body length is %d", size)
-		return
-	}
-
-	size = len(responseBody)
-	if size > r.maxPayloadSize {
-		logger.Debugf("ignoring responses with too long body: body length is %d", size)
-		return
-	}
-
 	var eventRequest, eventResponse producer.Payload
 
 	if ct := requestHeaders.Get("Content-Type"); strings.Contains(ct, "application/json") {
@@ -131,6 +113,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			Body:    emptyJSONBody,
 			Headers: map[string][]string{},
 		}
+		requestBody = []byte(emptyJSONBody)
 	}
 
 	if ct := responseHeaders.Get("Content-Type"); strings.Contains(ct, "application/json") {
@@ -144,6 +127,13 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			Body:    emptyJSONBody,
 			Headers: map[string][]string{},
 		}
+		responseBody = []byte(emptyJSONBody)
+	}
+
+	size := len(requestBody) + len(responseBody)
+	if size > r.maxPayloadSize {
+		logger.Debugf("ignoring requests with too long payload: payload length is %d", size)
+		return
 	}
 
 	r.wPool.Do(func() {
