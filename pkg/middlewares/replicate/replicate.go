@@ -21,19 +21,19 @@ import (
 )
 
 const (
-	typeName              = "Replicate"
-	emptyJSONBody         = "{}"
-	defaultMaxPayloadSize = 1000000
+	typeName                      = "Replicate"
+	emptyJSONBody                 = "{}"
+	defaultMaxProcessableBodySize = 1000000
 )
 
 // replicate is a middleware used to send copies of requests and responses to an arbitrary service.
 type replicate struct {
 	sync.RWMutex
-	next           http.Handler
-	name           string
-	producer       producer.Producer
-	wPool          *utils.WorkerPool
-	maxPayloadSize int
+	next                   http.Handler
+	name                   string
+	producer               producer.Producer
+	wPool                  *utils.WorkerPool
+	maxProcessableBodySize int
 }
 
 // New creates a new http handler.
@@ -41,19 +41,19 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 	ctx = middlewares.GetLoggerCtx(ctx, middlewareName, typeName)
 	log.FromContext(ctx).Debug("Creating middleware")
 
-	maxPayloadSize := config.Replicate.MaxPayloadSize
-	if maxPayloadSize <= 0 {
+	maxProcessableBodySize := config.Replicate.MaxProcessableBodySize
+	if maxProcessableBodySize <= 0 {
 		logger := log.FromContext(ctx)
-		logger.Debugf("maxPayloadSize from config equals zero or less, use default max payload size %d", defaultMaxPayloadSize)
-		maxPayloadSize = defaultMaxPayloadSize
+		logger.Debugf("maxProcessableBodySize from config equals zero or less, use default max processable body size %d", defaultMaxProcessableBodySize)
+		maxProcessableBodySize = defaultMaxProcessableBodySize
 	}
 
 	replicate := &replicate{
-		next:           next,
-		name:           middlewareName,
-		producer:       nil,
-		wPool:          utils.NewLimitPool(ctx, config.Replicate.WorkerPoolSize),
-		maxPayloadSize: maxPayloadSize,
+		next:                   next,
+		name:                   middlewareName,
+		producer:               nil,
+		wPool:                  utils.NewLimitPool(ctx, config.Replicate.WorkerPoolSize),
+		maxProcessableBodySize: maxProcessableBodySize,
 	}
 	replicate.wPool.Start()
 
@@ -73,7 +73,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	switch {
 	case !strings.Contains(req.Header.Get("Content-Type"), "application/json"):
 		logger.Debug("ignoring requests with header 'Content-Type' not 'application/json', setting Event.Request to '{}'")
-	case req.ContentLength > int64(r.maxPayloadSize):
+	case req.ContentLength > int64(r.maxProcessableBodySize):
 		logger.Debugf("ignoring requests with too long body: body length is %d", req.ContentLength)
 		r.next.ServeHTTP(rw, req)
 		return
@@ -130,7 +130,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	size := len(eventRequest.Body) + len(eventResponse.Body)
-	if size > r.maxPayloadSize {
+	if size > r.maxProcessableBodySize {
 		logger.Debugf("ignoring requests with too long payload: payload length is %d", size)
 		return
 	}

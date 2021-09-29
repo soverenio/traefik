@@ -66,12 +66,12 @@ func TestReplicate(t *testing.T) {
 		})
 		ctx := context.Background()
 		replicate := replicate{
-			RWMutex:        sync.RWMutex{},
-			next:           next,
-			name:           "test-replicate",
-			producer:       mockedProducer,
-			wPool:          utils.NewLimitPool(ctx, utils.DefaultPoolSize),
-			maxPayloadSize: defaultMaxPayloadSize,
+			RWMutex:                sync.RWMutex{},
+			next:                   next,
+			name:                   "test-replicate",
+			producer:               mockedProducer,
+			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
+			maxProcessableBodySize: defaultMaxProcessableBodySize,
 		}
 		replicate.wPool.Start()
 		defer replicate.wPool.Stop()
@@ -99,12 +99,12 @@ func TestReplicate(t *testing.T) {
 
 		ctx := context.Background()
 		replicate := replicate{
-			RWMutex:        sync.RWMutex{},
-			next:           next,
-			name:           "test-replicate",
-			producer:       mockedProducer,
-			wPool:          utils.NewLimitPool(ctx, utils.DefaultPoolSize),
-			maxPayloadSize: defaultMaxPayloadSize,
+			RWMutex:                sync.RWMutex{},
+			next:                   next,
+			name:                   "test-replicate",
+			producer:               mockedProducer,
+			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
+			maxProcessableBodySize: defaultMaxProcessableBodySize,
 		}
 		replicate.wPool.Start()
 		defer replicate.wPool.Stop()
@@ -169,12 +169,12 @@ func TestReplicate_skip_request(t *testing.T) {
 	})
 
 	replicate := replicate{
-		RWMutex:        sync.RWMutex{},
-		next:           next,
-		name:           "test-replicate",
-		producer:       mockedProducer,
-		wPool:          utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
-		maxPayloadSize: defaultMaxPayloadSize,
+		RWMutex:                sync.RWMutex{},
+		next:                   next,
+		name:                   "test-replicate",
+		producer:               mockedProducer,
+		wPool:                  utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
+		maxProcessableBodySize: defaultMaxProcessableBodySize,
 	}
 	replicate.wPool.Start()
 	defer replicate.wPool.Stop()
@@ -241,12 +241,12 @@ func TestReplicate_skip_response(t *testing.T) {
 	})
 
 	replicate := replicate{
-		RWMutex:        sync.RWMutex{},
-		next:           next,
-		name:           "test-replicate",
-		producer:       mockedProducer,
-		wPool:          utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
-		maxPayloadSize: defaultMaxPayloadSize,
+		RWMutex:                sync.RWMutex{},
+		next:                   next,
+		name:                   "test-replicate",
+		producer:               mockedProducer,
+		wPool:                  utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
+		maxProcessableBodySize: defaultMaxProcessableBodySize,
 	}
 	replicate.wPool.Start()
 	defer replicate.wPool.Stop()
@@ -268,7 +268,7 @@ func TestReplicate_too_long_body(t *testing.T) {
 		URL := "/test"
 		method := http.MethodPost
 		requestBody := "too long request body"
-		maxPayloadSize := len(requestBody) - 1
+		maxProcessableBodySize := len(requestBody) - 1
 
 		headers := make(map[string][]string, 2)
 		customHeaderKey := "X-Header"
@@ -298,12 +298,12 @@ func TestReplicate_too_long_body(t *testing.T) {
 		})
 		ctx := context.Background()
 		replicate := replicate{
-			RWMutex:        sync.RWMutex{},
-			next:           next,
-			name:           "test-replicate",
-			producer:       mockedProducer,
-			wPool:          utils.NewLimitPool(ctx, utils.DefaultPoolSize),
-			maxPayloadSize: maxPayloadSize,
+			RWMutex:                sync.RWMutex{},
+			next:                   next,
+			name:                   "test-replicate",
+			producer:               mockedProducer,
+			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
+			maxProcessableBodySize: maxProcessableBodySize,
 		}
 		replicate.wPool.Start()
 		defer replicate.wPool.Stop()
@@ -323,7 +323,7 @@ func TestReplicate_too_long_body(t *testing.T) {
 		URL := "/test"
 		method := http.MethodPost
 		expectedBody := "too long response body"
-		maxPayloadSize := len(expectedBody) - 1
+		maxProcessableBodySize := len(expectedBody) - 1
 		headers := make(map[string][]string, 2)
 		customHeaderKey := "X-Header"
 		headers[customHeaderKey] = []string{"header value"}
@@ -343,12 +343,12 @@ func TestReplicate_too_long_body(t *testing.T) {
 		})
 		ctx := context.Background()
 		replicate := replicate{
-			RWMutex:        sync.RWMutex{},
-			next:           next,
-			name:           "test-replicate",
-			producer:       mockedProducer,
-			wPool:          utils.NewLimitPool(ctx, utils.DefaultPoolSize),
-			maxPayloadSize: maxPayloadSize,
+			RWMutex:                sync.RWMutex{},
+			next:                   next,
+			name:                   "test-replicate",
+			producer:               mockedProducer,
+			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
+			maxProcessableBodySize: maxProcessableBodySize,
 		}
 		replicate.wPool.Start()
 		defer replicate.wPool.Stop()
@@ -368,7 +368,7 @@ func TestReplicate_too_long_body(t *testing.T) {
 		URL := "/test"
 		method := http.MethodPost
 		expectedBody := "part of too long payload"
-		maxPayloadSize := len(expectedBody)*2 - 1
+		maxProcessableBodySize := len(expectedBody)*2 - 1
 		headers := make(map[string][]string, 2)
 		customHeaderKey := "X-Header"
 		headers[customHeaderKey] = []string{"header value"}
@@ -388,12 +388,12 @@ func TestReplicate_too_long_body(t *testing.T) {
 		})
 		ctx := context.Background()
 		replicate := replicate{
-			RWMutex:        sync.RWMutex{},
-			next:           next,
-			name:           "test-replicate",
-			producer:       mockedProducer,
-			wPool:          utils.NewLimitPool(ctx, utils.DefaultPoolSize),
-			maxPayloadSize: maxPayloadSize,
+			RWMutex:                sync.RWMutex{},
+			next:                   next,
+			name:                   "test-replicate",
+			producer:               mockedProducer,
+			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
+			maxProcessableBodySize: maxProcessableBodySize,
 		}
 		replicate.wPool.Start()
 		defer replicate.wPool.Stop()
