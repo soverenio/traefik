@@ -65,8 +65,34 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	ctx := context.Background()
 	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, r.name, typeName))
 
-	body := req.Body
-	defer body.Close()
+	eventRequest := producer.Payload{
+		Body:    emptyJSONBody,
+		Headers: map[string][]string{},
+	}
+
+	ct := req.Header.Get("Content-Type")
+	switch {
+	case !strings.Contains(ct, "application/json"):
+		logger.Debug("ignoring requests with header 'Content-Type' not 'application/json', setting Event.Request to '{}'")
+	case req.ContentLength > int64(r.maxPayloadSize):
+		logger.Debugf("ignoring requests with too long body: body length is %d", req.ContentLength)
+		r.next.ServeHTTP(rw, req)
+		return
+	default:
+		body := req.Body
+		defer body.Close()
+
+		requestBody, err := ioutil.ReadAll(body)
+		if err != nil {
+			logger.Debug(err)
+			http.Error(rw, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		req.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
+
+		eventRequest.Body = string(requestBody)
+		eventRequest.Headers = req.Header
+	}
 
 	method := req.Method
 	URL := req.URL.String()
@@ -77,16 +103,6 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		logger.Warn(err, "invalid remote address: ", req.RemoteAddr)
 		remoteAddr = req.RemoteAddr
 	}
-
-	requestHeaders := req.Header
-
-	requestBody, err := ioutil.ReadAll(body)
-	if err != nil {
-		logger.Debug(err)
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	req.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
 
 	recorder := newResponseRecorder(rw)
 	r.next.ServeHTTP(recorder, req)
@@ -100,21 +116,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var eventRequest, eventResponse producer.Payload
-
-	if ct := requestHeaders.Get("Content-Type"); strings.Contains(ct, "application/json") {
-		eventRequest = producer.Payload{
-			Body:    string(requestBody),
-			Headers: requestHeaders,
-		}
-	} else {
-		logger.Debug("ignoring requests with header 'Content-Type' not 'application/json', setting Event.Request to '{}'")
-		eventRequest = producer.Payload{
-			Body:    emptyJSONBody,
-			Headers: map[string][]string{},
-		}
-	}
-
+	var eventResponse producer.Payload
 	if ct := responseHeaders.Get("Content-Type"); strings.Contains(ct, "application/json") {
 		eventResponse = producer.Payload{
 			Body:    string(responseBody),
