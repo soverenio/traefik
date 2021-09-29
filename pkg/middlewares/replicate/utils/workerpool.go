@@ -22,9 +22,13 @@ type WorkerPool struct {
 
 func (p *WorkerPool) workerLoop(ctx context.Context) {
 	defer p.workerWaitGroup.Done()
-
+	queue := p.jobs.ReadQueue()
+	if queue == nil { // that means channel was closed, stopping processing messages
+		log.FromContext(ctx).Debug("stopping worker from worker pool")
+		return
+	}
 	for {
-		jobFunc, ok := <-p.jobs.ReadQueue()
+		jobFunc, ok := <-queue
 		if !ok { // that means channel is closed, stopping processing messages
 			log.FromContext(ctx).Debug("stopping worker from worker pool")
 			return
