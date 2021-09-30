@@ -42,7 +42,7 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 	ctx = middlewares.GetLoggerCtx(ctx, middlewareName, middlewareType)
 	logger := log.FromContext(ctx)
 
-	logger.Debugf("Creating middleware %v", middlewareName)
+	logger.Debugf("creating middleware %v", middlewareName)
 	maxProcessableBodySize := config.Replicate.MaxProcessableBodySize
 	if maxProcessableBodySize <= 0 {
 		logger.Debugf("maxProcessableBodySize from config equals zero or less, use default value: %d", defaultMaxProcessableBodySize)
@@ -217,7 +217,7 @@ func sendAlive(ctx context.Context, p producer.Producer, name string, topic stri
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Debug("Stopping sending alive messages")
+			logger.Debug("stop sending alive messages")
 			return
 		case <-ticker.C:
 			hostname, err := os.Hostname()
