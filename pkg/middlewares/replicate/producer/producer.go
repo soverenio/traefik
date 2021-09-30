@@ -60,7 +60,7 @@ func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) 
 
 // Connect to kafka.
 func (p *KafkaPublisher) Connect(ctx context.Context) {
-	ctx = log.With(ctx, log.Str("component", "kafkaProducer"))
+	ctx = log.With(ctx, log.Str("component", "kafkaPublisher"))
 	logger := log.FromContext(ctx)
 
 	config := kafka.PublisherConfig{
@@ -79,7 +79,7 @@ func (p *KafkaPublisher) Connect(ctx context.Context) {
 				p.Publisher = publisher
 				return
 			}
-			logger.Warnf("failed to create kafka publisher: %v", err)
+			logger.Warnf("error while creating a new publisher instance: %v", err)
 		}
 	}
 }
