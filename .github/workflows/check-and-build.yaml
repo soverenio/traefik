@@ -77,3 +77,22 @@ jobs:
         run: |
           DIGEST=$(docker push -a "${IMAGE_NAME}" | awk '/digest/ {print $3}')
           echo "DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
+
+  notify:
+    needs: build-push
+    if: startsWith(github.ref, 'refs/tags/v')
+    name: Tag processing
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/soverenio/git-tag-handler
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GHCR_PAT }}
+    steps:
+      - run: git-tag-handler
+        env:
+          SLACK_CHANNEL: notify-sps-deploy
+          SLACK_API_TOKEN: ${{ secrets.SLACK_API_TOKEN }}
+          JIRA_LOGIN: ${{ secrets.JIRA_LOGIN }}
+          JIRA_PASSWORD: ${{ secrets.JIRA_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.SVRN_SERVICE_PAT }}
