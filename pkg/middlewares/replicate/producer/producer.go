@@ -60,7 +60,9 @@ func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) 
 
 // Connect to kafka.
 func (p *KafkaPublisher) Connect(ctx context.Context) {
+	ctx = log.With(ctx, log.Str("component", "kafkaPublisher"))
 	logger := log.FromContext(ctx)
+
 	config := kafka.PublisherConfig{
 		Brokers:   p.brokers,
 		Marshaler: kafka.DefaultMarshaler{},
@@ -73,10 +75,11 @@ func (p *KafkaPublisher) Connect(ctx context.Context) {
 		default:
 			publisher, err := kafka.NewPublisher(config, &watermillLogger{Log: logger.WithField("service", "watermill")})
 			if err == nil {
+				logger.Debug("kafka publisher created")
 				p.Publisher = publisher
 				return
 			}
-			logger.Warn("failed to create a producer")
+			logger.Warnf("error while creating a new publisher instance: %v", err)
 		}
 	}
 }
