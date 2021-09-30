@@ -64,8 +64,8 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 }
 
 func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	ctx := context.Background()
-	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, r.name, middlewareType))
+	ctx := middlewares.GetLoggerCtx(context.Background(), r.name, middlewareType)
+	logger := log.FromContext(ctx)
 
 	eventRequest := producer.Payload{
 		Body:    emptyJSONBody,
@@ -200,10 +200,10 @@ func (r *replicate) connectProducer(ctx context.Context, config *runtime.Middlew
 }
 
 func sendEvent(ctx context.Context, producer producer.Producer, event producer.Event, name string) {
-	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, middlewareType))
+	logger := log.FromContext(ctx)
 	err := producer.Produce(event)
 	if err != nil {
-		logger.Warn(err)
+		logger.Warnf("error sending event message to kafka: %v", err)
 	}
 }
 
