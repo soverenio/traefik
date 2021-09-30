@@ -23,14 +23,18 @@ type WorkerPool struct {
 func (p *WorkerPool) workerLoop(ctx context.Context) {
 	defer p.workerWaitGroup.Done()
 	queue := p.jobs.ReadQueue()
+	logger := log.FromContext(ctx)
+	logger.Debug("worker started")
+
 	if queue == nil { // that means channel was closed, stopping processing messages
-		log.FromContext(ctx).Debug("stopping worker from worker pool")
+		logger.Debug("stopping worker")
 		return
 	}
+
 	for {
 		jobFunc, ok := <-queue
 		if !ok { // that means channel is closed, stopping processing messages
-			log.FromContext(ctx).Debug("stopping worker from worker pool")
+			logger.Debug("stopping worker")
 			return
 		}
 		jobFunc()
@@ -40,8 +44,10 @@ func (p *WorkerPool) workerLoop(ctx context.Context) {
 // NewLimitPool create new Worker Pool.
 func NewLimitPool(parentCtx context.Context, poolSize int) *WorkerPool {
 	ctx, cancel := context.WithCancel(parentCtx)
+	ctx = log.With(ctx, log.Str("component", "workerpool"))
+	logger := log.FromContext(ctx)
+
 	if poolSize == 0 {
-		logger := log.FromContext(ctx)
 		logger.Debugf("poolSize equal zero from config, use default pool size %d", DefaultPoolSize)
 		poolSize = DefaultPoolSize
 	}

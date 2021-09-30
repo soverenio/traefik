@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -21,7 +22,7 @@ import (
 )
 
 const (
-	typeName                      = "Replicate"
+	middlewareType                = "Replicate"
 	emptyJSONBody                 = "{}"
 	defaultMaxProcessableBodySize = 1000000
 )
@@ -38,13 +39,13 @@ type replicate struct {
 
 // New creates a new http handler.
 func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo, middlewareName string) http.Handler {
-	ctx = middlewares.GetLoggerCtx(ctx, middlewareName, typeName)
-	log.FromContext(ctx).Debug("Creating middleware")
+	ctx = middlewares.GetLoggerCtx(ctx, middlewareName, middlewareType)
+	logger := log.FromContext(ctx)
 
+	logger.Debugf("Creating middleware %v", middlewareName)
 	maxProcessableBodySize := config.Replicate.MaxProcessableBodySize
 	if maxProcessableBodySize <= 0 {
-		logger := log.FromContext(ctx)
-		logger.Debugf("maxProcessableBodySize from config equals zero or less, use default max processable body size %d", defaultMaxProcessableBodySize)
+		logger.Debugf("maxProcessableBodySize from config equals zero or less, use default value: %d", defaultMaxProcessableBodySize)
 		maxProcessableBodySize = defaultMaxProcessableBodySize
 	}
 
@@ -56,6 +57,7 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 		maxProcessableBodySize: maxProcessableBodySize,
 	}
 	replicate.wPool.Start()
+	logger.Debug("worker pool started")
 
 	go replicate.connectProducer(ctx, config, middlewareName, next)
 	return replicate
@@ -63,7 +65,7 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 
 func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	ctx := context.Background()
-	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, r.name, typeName))
+	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, r.name, middlewareType))
 
 	eventRequest := producer.Payload{
 		Body:    emptyJSONBody,
@@ -83,8 +85,9 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 		requestBody, err := ioutil.ReadAll(body)
 		if err != nil {
-			logger.Debug(err)
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
+			msg := fmt.Sprintf("error reading request body: %e", err)
+			logger.Debug(msg)
+			http.Error(rw, msg, http.StatusInternalServerError)
 			return
 		}
 		req.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
@@ -99,7 +102,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	remoteAddr, _, err := net.SplitHostPort(req.RemoteAddr)
 	if err != nil {
-		logger.Warn(err, "invalid remote address: ", req.RemoteAddr)
+		logger.Warnf("invalid remote address: %s: %v", req.RemoteAddr, err)
 		remoteAddr = req.RemoteAddr
 	}
 
@@ -110,8 +113,9 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	_, err = rw.Write(responseBody)
 	if err != nil {
-		logger.Debug(err)
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		msg := fmt.Sprintf("failed to write response body: %e", err)
+		logger.Debugf(msg)
+		http.Error(rw, msg, http.StatusInternalServerError)
 		return
 	}
 
@@ -165,6 +169,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 // StartAlive start regular message sending alive message to kafka for  health checking.
 func StartAlive(ctx context.Context, producer producer.Producer, name string, topic string, duration time.Duration) error {
+	ctx = log.With(ctx, log.Str("component", "alive"))
 	if topic == "" {
 		return errors.New("topic is required")
 	}
@@ -175,10 +180,11 @@ func StartAlive(ctx context.Context, producer producer.Producer, name string, to
 }
 
 func (r *replicate) connectProducer(ctx context.Context, config *runtime.MiddlewareInfo, middlewareName string, next http.Handler) {
+	logger := log.FromContext(ctx)
+
 	producerInstance, err := producer.NewKafkaPublisher(config.Replicate.Topic, config.Replicate.Brokers)
 	if err != nil {
-		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
-			Fatal(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
+		logger.Fatalf("failed to create a producer: %v", err)
 		return
 	}
 	producerInstance.Connect(ctx)
@@ -189,13 +195,12 @@ func (r *replicate) connectProducer(ctx context.Context, config *runtime.Middlew
 
 	err = StartAlive(ctx, r.producer, middlewareName, config.Replicate.AliveTopic, time.Second*10)
 	if err != nil {
-		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
-			Warn(strings.Join([]string{"Replicate: failed to start sending alive messages", err.Error()}, ": "))
+		logger.Warnf("failed to start sending alive messages: %v", err)
 	}
 }
 
 func sendEvent(ctx context.Context, producer producer.Producer, event producer.Event, name string) {
-	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
+	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, middlewareType))
 	err := producer.Produce(event)
 	if err != nil {
 		logger.Warn(err)
@@ -203,7 +208,7 @@ func sendEvent(ctx context.Context, producer producer.Producer, event producer.E
 }
 
 func sendAlive(ctx context.Context, p producer.Producer, name string, topic string, duration time.Duration) {
-	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
+	logger := log.FromContext(ctx)
 	logger.Debug("Initial sending alive messages")
 
 	ticker := time.NewTicker(duration)
@@ -217,14 +222,14 @@ func sendAlive(ctx context.Context, p producer.Producer, name string, topic stri
 		case <-ticker.C:
 			hostname, err := os.Hostname()
 			if err != nil {
-				logger.Debug(err)
+				logger.Warnf("failed to resolve hostname: %v", err)
 			}
 			err = p.ProduceTo(producer.Event{
 				Host: hostname,
 				Time: time.Now().UTC(),
 			}, topic)
 			if err != nil {
-				logger.Warn(err)
+				logger.Warnf("failed to send message: %v", err)
 			}
 		}
 	}
