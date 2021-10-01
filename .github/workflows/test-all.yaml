@@ -1,9 +1,9 @@
 name: Test All
 
 on:
-  pull_request:
+  push:
     branches:
-      - '*'
+      - release/**
 
 env:
   GO_VERSION: 1.16
