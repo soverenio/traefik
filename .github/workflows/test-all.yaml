@@ -1,4 +1,4 @@
-name: Test Unit
+name: Test All
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ env:
 
 jobs:
 
-  test-unit:
+  test-all:
     runs-on: ubuntu-20.04
 
     defaults:
