@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - release/**
+  workflow_dispatch:
 
 env:
   GO_VERSION: 1.16
@@ -43,4 +44,4 @@ jobs:
         run: go install github.com/containous/go-bindata/go-bindata@v1.0.0
 
       - name: Tests
-        run: make test
+        run: make test-integration
