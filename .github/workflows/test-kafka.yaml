@@ -14,47 +14,8 @@ jobs:
 
       - name: Setup test environment
         run: |
-          docker network create --driver bridge test-net
-
-          docker build -t soveren/traefic-exp:local -f exp.Dockerfile .
-          docker pull bitnami/zookeeper:3.7
-          docker pull bitnami/kafka:2
-          docker pull nginx
-
-          docker run -d \
-            --name zookeeper \
-            --network test-net \
-            -p 2181:2181 \
-            -v zookeeper_data:/bitnami \
-            -e ALLOW_ANONYMOUS_LOGIN=yes \
-            -e ZOO_4LW_COMMANDS_WHITELIST=ruok \
-            bitnami/zookeeper:3.7
-
-          docker run -d \
-            --name kafka \
-            --network test-net \
-            -p 9092:9092 \
-            -v kafka_data:/bitnami \
-            -e ALLOW_PLAINTEXT_LISTENER=yes \
-            -e KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181 \
-            bitnami/kafka:2
-
-          docker run -d \
-            --name backend \
-            --network test-net \
-            -p 8080:8080 \
-            -v $(pwd)/test-kafka/backend.conf:/etc/nginx/conf.d/backend.conf \
-            nginx
-
-          docker run -d \
-            --name proxy \
-            --network test-net \
-            -p 8090:8090 \
-            -v $(pwd)/test-kafka/traefik_configs:/etc/traefik/conf \
-            -e TRAEFIK_LOG_LEVEL=INFO \
-            -e TRAEFIK_PROVIDERS_FILE_DIRECTORY=/etc/traefik/conf/conf.d/ \
-            -e TRAEFIK_ENTRYPOINTS_WEB_ADDRESS=":8090" \
-            soveren/traefic-exp:local
+          cd test/soveren-middleware-chaos
+          docker-compose up -d
 
       - name: Run some ab instances
         run: |
@@ -89,11 +50,12 @@ jobs:
           kill -0 $(cat ab1.pid) || exit 1
           kill -0 $(cat ab2.pid) || exit 1
 
-      - name: Check ab instances
+      - name: Stop ab and show its logs
         run: |
           # stop ab
           kill -2 $(cat ab1.pid)
           kill -2 $(cat ab2.pid)
+          sleep 1
 
           # show logs
           cat ab1.log
