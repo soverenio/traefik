@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/producer"
 	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/utils"
 )
@@ -58,7 +59,7 @@ func TestReplicate(t *testing.T) {
 			require.NoError(t, err)
 		})
 
-		mockedProducer := MockProducer(func(event producer.Event) error {
+		mockedProducer := MockEventProducer(func(event producer.Event) error {
 			assert.NotEmpty(t, event.Time)
 			expectedEvent.Time = event.Time
 			assert.Equal(t, expectedEvent, event)
@@ -72,9 +73,17 @@ func TestReplicate(t *testing.T) {
 			producer:               mockedProducer,
 			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
 			maxProcessableBodySize: defaultMaxProcessableBodySize,
+			discardedRequests:      utils.NewSyncCounter(),
+			failedRequests:         utils.NewSyncCounter(),
+			successfulRequests:     utils.NewSyncCounter(),
 		}
 		replicate.wPool.Start()
-		defer replicate.wPool.Stop()
+		defer func() {
+			replicate.wPool.Stop()
+			assert.EqualValues(t, 0, replicate.failedRequests.Load())
+			assert.EqualValues(t, 0, replicate.discardedRequests.Load())
+			assert.EqualValues(t, 1, replicate.successfulRequests.Load())
+		}()
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
 		request.Header = headers
@@ -93,7 +102,7 @@ func TestReplicate(t *testing.T) {
 			_, err := w.Write([]byte("body"))
 			require.NoError(t, err)
 		})
-		mockedProducer := MockProducer(func(event producer.Event) error {
+		mockedProducer := MockEventProducer(func(event producer.Event) error {
 			return errors.New("test-error")
 		})
 
@@ -105,9 +114,17 @@ func TestReplicate(t *testing.T) {
 			producer:               mockedProducer,
 			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
 			maxProcessableBodySize: defaultMaxProcessableBodySize,
+			discardedRequests:      utils.NewSyncCounter(),
+			failedRequests:         utils.NewSyncCounter(),
+			successfulRequests:     utils.NewSyncCounter(),
 		}
 		replicate.wPool.Start()
-		defer replicate.wPool.Stop()
+		defer func() {
+			replicate.wPool.Stop()
+			assert.EqualValues(t, 1, replicate.failedRequests.Load())
+			assert.EqualValues(t, 0, replicate.discardedRequests.Load())
+			assert.EqualValues(t, 0, replicate.successfulRequests.Load())
+		}()
 
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -161,7 +178,7 @@ func TestReplicate_skip_request(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	mockedProducer := MockProducer(func(event producer.Event) error {
+	mockedProducer := MockEventProducer(func(event producer.Event) error {
 		require.NotEmpty(t, event.Time)
 		expectedEvent.Time = event.Time
 		require.Equal(t, expectedEvent, event)
@@ -175,9 +192,17 @@ func TestReplicate_skip_request(t *testing.T) {
 		producer:               mockedProducer,
 		wPool:                  utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
 		maxProcessableBodySize: defaultMaxProcessableBodySize,
+		discardedRequests:      utils.NewSyncCounter(),
+		failedRequests:         utils.NewSyncCounter(),
+		successfulRequests:     utils.NewSyncCounter(),
 	}
 	replicate.wPool.Start()
-	defer replicate.wPool.Stop()
+	defer func() {
+		replicate.wPool.Stop()
+		assert.EqualValues(t, 0, replicate.failedRequests.Load())
+		assert.EqualValues(t, 0, replicate.discardedRequests.Load())
+		assert.EqualValues(t, 1, replicate.successfulRequests.Load())
+	}()
 
 	request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
 	request.Header = headersReq
@@ -233,7 +258,7 @@ func TestReplicate_skip_response(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	mockedProducer := MockProducer(func(event producer.Event) error {
+	mockedProducer := MockEventProducer(func(event producer.Event) error {
 		require.NotEmpty(t, event.Time)
 		expectedEvent.Time = event.Time
 		require.Equal(t, expectedEvent, event)
@@ -247,9 +272,17 @@ func TestReplicate_skip_response(t *testing.T) {
 		producer:               mockedProducer,
 		wPool:                  utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
 		maxProcessableBodySize: defaultMaxProcessableBodySize,
+		discardedRequests:      utils.NewSyncCounter(),
+		failedRequests:         utils.NewSyncCounter(),
+		successfulRequests:     utils.NewSyncCounter(),
 	}
 	replicate.wPool.Start()
-	defer replicate.wPool.Stop()
+	defer func() {
+		replicate.wPool.Stop()
+		assert.EqualValues(t, 0, replicate.failedRequests.Load())
+		assert.EqualValues(t, 0, replicate.discardedRequests.Load())
+		assert.EqualValues(t, 1, replicate.successfulRequests.Load())
+	}()
 
 	request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
 	request.Header = headersReq
@@ -292,7 +325,7 @@ func TestReplicate_too_long_body(t *testing.T) {
 			require.NoError(t, err)
 		})
 
-		mockedProducer := MockProducer(func(event producer.Event) error {
+		mockedProducer := MockEventProducer(func(event producer.Event) error {
 			assert.Fail(t, "producer should not be called")
 			return nil
 		})
@@ -304,9 +337,17 @@ func TestReplicate_too_long_body(t *testing.T) {
 			producer:               mockedProducer,
 			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
 			maxProcessableBodySize: maxProcessableBodySize,
+			discardedRequests:      utils.NewSyncCounter(),
+			failedRequests:         utils.NewSyncCounter(),
+			successfulRequests:     utils.NewSyncCounter(),
 		}
 		replicate.wPool.Start()
-		defer replicate.wPool.Stop()
+		defer func() {
+			replicate.wPool.Stop()
+			assert.EqualValues(t, 0, replicate.failedRequests.Load())
+			assert.EqualValues(t, 1, replicate.discardedRequests.Load())
+			assert.EqualValues(t, 0, replicate.successfulRequests.Load())
+		}()
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(requestBody))
 		request.Header = headers
@@ -337,7 +378,7 @@ func TestReplicate_too_long_body(t *testing.T) {
 			require.NoError(t, err)
 		})
 
-		mockedProducer := MockProducer(func(event producer.Event) error {
+		mockedProducer := MockEventProducer(func(event producer.Event) error {
 			assert.Fail(t, "producer should not be called")
 			return nil
 		})
@@ -349,9 +390,17 @@ func TestReplicate_too_long_body(t *testing.T) {
 			producer:               mockedProducer,
 			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
 			maxProcessableBodySize: maxProcessableBodySize,
+			discardedRequests:      utils.NewSyncCounter(),
+			failedRequests:         utils.NewSyncCounter(),
+			successfulRequests:     utils.NewSyncCounter(),
 		}
 		replicate.wPool.Start()
-		defer replicate.wPool.Stop()
+		defer func() {
+			replicate.wPool.Stop()
+			assert.EqualValues(t, 0, replicate.failedRequests.Load())
+			assert.EqualValues(t, 1, replicate.discardedRequests.Load())
+			assert.EqualValues(t, 0, replicate.successfulRequests.Load())
+		}()
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(""))
 		request.Header = headers
@@ -382,7 +431,7 @@ func TestReplicate_too_long_body(t *testing.T) {
 			require.NoError(t, err)
 		})
 
-		mockedProducer := MockProducer(func(event producer.Event) error {
+		mockedProducer := MockEventProducer(func(event producer.Event) error {
 			assert.Fail(t, "producer should not be called")
 			return nil
 		})
@@ -394,9 +443,17 @@ func TestReplicate_too_long_body(t *testing.T) {
 			producer:               mockedProducer,
 			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
 			maxProcessableBodySize: maxProcessableBodySize,
+			discardedRequests:      utils.NewSyncCounter(),
+			failedRequests:         utils.NewSyncCounter(),
+			successfulRequests:     utils.NewSyncCounter(),
 		}
 		replicate.wPool.Start()
-		defer replicate.wPool.Stop()
+		defer func() {
+			replicate.wPool.Stop()
+			assert.EqualValues(t, 0, replicate.failedRequests.Load())
+			assert.EqualValues(t, 1, replicate.discardedRequests.Load())
+			assert.EqualValues(t, 0, replicate.successfulRequests.Load())
+		}()
 
 		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
 		request.Header = headers
@@ -411,34 +468,155 @@ func TestReplicate_too_long_body(t *testing.T) {
 	})
 }
 
-func TestAlive(t *testing.T) {
-	t.Run("Alive message send", func(t *testing.T) {
+func TestReplicate_not_enough_workers(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	sleep := make(chan struct{})
+	mockedProducer := MockEventProducer(func(event producer.Event) error {
+		if event.URL == "/test" {
+			wg.Done()
+		}
+		<-sleep
+		return nil
+	})
+
+	replicate := replicate{
+		RWMutex:                sync.RWMutex{},
+		next:                   next,
+		name:                   "test-replicate",
+		producer:               mockedProducer,
+		wPool:                  utils.NewLimitPool(context.Background(), 1),
+		maxProcessableBodySize: defaultMaxProcessableBodySize,
+		discardedRequests:      utils.NewSyncCounter(),
+		failedRequests:         utils.NewSyncCounter(),
+		successfulRequests:     utils.NewSyncCounter(),
+	}
+	replicate.wPool.Start()
+	defer func() {
+		replicate.wPool.Stop()
+		assert.EqualValues(t, 1, replicate.wPool.LoadDiscarded())
+		assert.EqualValues(t, 0, replicate.discardedRequests.Load())
+		assert.EqualValues(t, 0, replicate.failedRequests.Load())
+		assert.EqualValues(t, 2, replicate.successfulRequests.Load())
+	}()
+
+	recorder := httptest.NewRecorder()
+	// send 3 request, pool has only one worker, queue length is one
+	replicate.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/test", nil))
+	wg.Wait()
+	replicate.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/queue", nil))
+	replicate.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/discarded", nil))
+	close(sleep)
+}
+
+func TestHeartbeat(t *testing.T) {
+	t.Run("Heartbeat message send", func(t *testing.T) {
 		var calls int
-		producer := MockProducer(func(event producer.Event) error {
-			assert.NotEmpty(t, event.Time)
-			assert.NotEmpty(t, event.Host)
+
+		expectedPoolDiscarded := uint64(5)
+		expectedDiscarded := uint64(10)
+		expectedFailed := uint64(20)
+		expectedSuccessful := uint64(50)
+		producer := MockHeartbeatProducer(func(heartbeat producer.Heartbeat) error {
+			assert.NotEmpty(t, heartbeat.Time)
+			assert.NotEmpty(t, heartbeat.Host)
+			assert.EqualValues(t, expectedPoolDiscarded+expectedDiscarded, heartbeat.Discarded)
+			assert.EqualValues(t, expectedFailed, heartbeat.Failed)
+			assert.EqualValues(t, expectedSuccessful, heartbeat.Successful)
 			calls++
 			return nil
 		})
 
 		duration := time.Second * 3
 		ctx, cancel := context.WithCancel(context.Background())
-		err := StartAlive(ctx, producer, "test-replicate", "alive", duration)
+		replicate := replicate{
+			RWMutex:            sync.RWMutex{},
+			name:               "test-replicate",
+			producer:           producer,
+			wPool:              utils.NewLimitPool(ctx, utils.DefaultPoolSize),
+			discardedRequests:  utils.NewSyncCounter(),
+			failedRequests:     utils.NewSyncCounter(),
+			successfulRequests: utils.NewSyncCounter(),
+		}
+		replicate.wPool.AddDiscarded(expectedPoolDiscarded)
+		replicate.discardedRequests.Add(expectedDiscarded)
+		replicate.failedRequests.Add(expectedFailed)
+		replicate.successfulRequests.Add(expectedSuccessful)
+
+		err := replicate.StartHeartbeat(ctx, producer, "test-replicate", duration)
 		require.NoError(t, err)
 		time.Sleep(duration + time.Second)
 		assert.Equal(t, 1, calls)
 		cancel()
 		time.Sleep(duration + time.Second)
 		assert.Equal(t, 1, calls)
+
+		assert.EqualValues(t, 0, replicate.wPool.LoadDiscarded())
+		assert.EqualValues(t, 0, replicate.discardedRequests.Load())
+		assert.EqualValues(t, 0, replicate.failedRequests.Load())
+		assert.EqualValues(t, 0, replicate.successfulRequests.Load())
+	})
+	t.Run("Heartbeat message send error", func(t *testing.T) {
+		var calls int
+
+		producer := MockHeartbeatProducer(func(heartbeat producer.Heartbeat) error {
+			calls++
+			return errors.New("test-error")
+		})
+
+		duration := time.Second * 3
+		ctx, cancel := context.WithCancel(context.Background())
+		replicate := replicate{
+			RWMutex:            sync.RWMutex{},
+			name:               "test-replicate",
+			producer:           producer,
+			wPool:              utils.NewLimitPool(ctx, utils.DefaultPoolSize),
+			discardedRequests:  utils.NewSyncCounter(),
+			failedRequests:     utils.NewSyncCounter(),
+			successfulRequests: utils.NewSyncCounter(),
+		}
+
+		expectedPoolDiscarded := uint64(5)
+		expectedDiscarded := uint64(10)
+		expectedFailed := uint64(20)
+		expectedSuccessful := uint64(50)
+
+		replicate.wPool.AddDiscarded(expectedPoolDiscarded)
+		replicate.discardedRequests.Add(expectedDiscarded)
+		replicate.failedRequests.Add(expectedFailed)
+		replicate.successfulRequests.Add(expectedSuccessful)
+
+		err := replicate.StartHeartbeat(ctx, producer, "test-replicate", duration)
+		require.NoError(t, err)
+		time.Sleep(duration + time.Second)
+		assert.Equal(t, 1, calls)
+		cancel()
+
+		assert.EqualValues(t, expectedPoolDiscarded, replicate.wPool.LoadDiscarded())
+		assert.EqualValues(t, expectedDiscarded, replicate.discardedRequests.Load())
+		assert.EqualValues(t, expectedFailed, replicate.failedRequests.Load())
+		assert.EqualValues(t, expectedSuccessful, replicate.successfulRequests.Load())
 	})
 }
 
-type MockProducer func(producer.Event) error
+type MockEventProducer func(producer.Event) error
 
-func (m MockProducer) Produce(ev producer.Event) error {
+func (m MockEventProducer) ProduceEvent(ev producer.Event) error {
 	return m(ev)
 }
 
-func (m MockProducer) ProduceTo(ev producer.Event, topic string) error {
-	return m(ev)
+func (m MockEventProducer) ProduceHeartbeat(ev producer.Heartbeat) error {
+	panic("illegal call")
+}
+
+type MockHeartbeatProducer func(producer.Heartbeat) error
+
+func (m MockHeartbeatProducer) ProduceEvent(ev producer.Event) error {
+	panic("illegal call")
+}
+
+func (m MockHeartbeatProducer) ProduceHeartbeat(hb producer.Heartbeat) error {
+	return m(hb)
 }

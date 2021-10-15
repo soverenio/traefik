@@ -11,6 +11,7 @@ import (
 type syncWriteQueue struct {
 	writeMutex sync.RWMutex
 	queue      chan func()
+	discarded  SyncCounter
 }
 
 // Enqueue appends element to queue (in case it isn't closed)
@@ -28,7 +29,7 @@ func (s *syncWriteQueue) Enqueue(job func()) {
 	select {
 	case s.queue <- job:
 	default:
-		// do nothing
+		s.discarded.Inc()
 	}
 }
 
@@ -49,6 +50,7 @@ func newSyncWriteQueue(queueLength int) *syncWriteQueue {
 		panic("illegal value")
 	}
 	return &syncWriteQueue{
-		queue: make(chan func(), queueLength),
+		queue:     make(chan func(), queueLength),
+		discarded: NewSyncCounter(),
 	}
 }
