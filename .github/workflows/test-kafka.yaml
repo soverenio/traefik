@@ -26,11 +26,11 @@ jobs:
 
       - name: Mess with zookeeper
         run: |
-          docker restart zookeeper
+          docker-compose restart zookeeper
           sleep 10
-          docker kill zookeeper
+          docker-compose kill zookeeper
           sleep 10
-          docker start zookeeper
+          docker-compose start zookeeper
           sleep 10
 
           # check if ab still running
@@ -39,11 +39,11 @@ jobs:
 
       - name: Mess with kafka
         run: |
-          docker restart kafka
+          docker-compose restart kafka
           sleep 10
-          docker kill kafka
+          docker-compose kill kafka
           sleep 10
-          docker start kafka
+          docker-compose start kafka
           sleep 10
 
           # check if ab still running
