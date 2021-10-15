@@ -10,7 +10,7 @@ services:
   proxy:
     image: soveren/traefik-exp:local
     build:
-      context: ..
+      context: ../..
       dockerfile: exp.Dockerfile
     ports:
       - "8090:8090"
