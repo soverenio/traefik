@@ -58,10 +58,13 @@ func TestReplicate(t *testing.T) {
 			require.NoError(t, err)
 		})
 
+		wg := sync.WaitGroup{}
+		wg.Add(1)
 		mockedProducer := MockEventProducer(func(event producer.Event) error {
 			assert.NotEmpty(t, event.Time)
 			expectedEvent.Time = event.Time
 			assert.Equal(t, expectedEvent, event)
+			wg.Done()
 			return nil
 		})
 		ctx := context.Background()
@@ -78,6 +81,7 @@ func TestReplicate(t *testing.T) {
 		}
 		replicate.wPool.Start()
 		defer func() {
+			wg.Wait()
 			replicate.wPool.Stop()
 			assert.EqualValues(t, 0, replicate.failedRequests.Load())
 			assert.EqualValues(t, 0, replicate.discardedRequests.Load())
@@ -101,7 +105,10 @@ func TestReplicate(t *testing.T) {
 			_, err := w.Write([]byte("body"))
 			require.NoError(t, err)
 		})
+		wg := sync.WaitGroup{}
+		wg.Add(1)
 		mockedProducer := MockEventProducer(func(event producer.Event) error {
+			wg.Done()
 			return errors.New("test-error")
 		})
 
@@ -119,6 +126,7 @@ func TestReplicate(t *testing.T) {
 		}
 		replicate.wPool.Start()
 		defer func() {
+			wg.Wait()
 			replicate.wPool.Stop()
 			assert.EqualValues(t, 1, replicate.failedRequests.Load())
 			assert.EqualValues(t, 0, replicate.discardedRequests.Load())
@@ -177,10 +185,13 @@ func TestReplicate_skip_request(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	mockedProducer := MockEventProducer(func(event producer.Event) error {
 		require.NotEmpty(t, event.Time)
 		expectedEvent.Time = event.Time
 		require.Equal(t, expectedEvent, event)
+		wg.Done()
 		return nil
 	})
 
@@ -197,6 +208,7 @@ func TestReplicate_skip_request(t *testing.T) {
 	}
 	replicate.wPool.Start()
 	defer func() {
+		wg.Wait()
 		replicate.wPool.Stop()
 		assert.EqualValues(t, 0, replicate.failedRequests.Load())
 		assert.EqualValues(t, 0, replicate.discardedRequests.Load())
@@ -257,10 +269,13 @@ func TestReplicate_skip_response(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	mockedProducer := MockEventProducer(func(event producer.Event) error {
 		require.NotEmpty(t, event.Time)
 		expectedEvent.Time = event.Time
 		require.Equal(t, expectedEvent, event)
+		wg.Done()
 		return nil
 	})
 
@@ -277,6 +292,7 @@ func TestReplicate_skip_response(t *testing.T) {
 	}
 	replicate.wPool.Start()
 	defer func() {
+		wg.Wait()
 		replicate.wPool.Stop()
 		assert.EqualValues(t, 0, replicate.failedRequests.Load())
 		assert.EqualValues(t, 0, replicate.discardedRequests.Load())
