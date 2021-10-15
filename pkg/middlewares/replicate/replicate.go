@@ -174,7 +174,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		r.sendEvent(ctx, ev)
+		r.sendEvent(ctx, r.producer, ev, r.name)
 	})
 }
 
@@ -207,7 +207,7 @@ func (r *replicate) connectProducer(ctx context.Context, config *runtime.Middlew
 	}
 }
 
-func (r *replicate) sendEvent(ctx context.Context, event producer.Event) {
+func (r *replicate) sendEvent(ctx context.Context, producer producer.Producer, event producer.Event, name string) {
 	logger := log.FromContext(ctx)
 	err := r.producer.ProduceEvent(event)
 	switch {
