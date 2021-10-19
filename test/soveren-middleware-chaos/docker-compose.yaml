@@ -20,38 +20,14 @@ services:
       TRAEFIK_ENTRYPOINTS_WEB_ADDRESS: ":8090"
     volumes:
       - ./traefik_configs:/etc/traefik/conf
-  zookeeper:
-    image: soveren/zookeeper:bn-3.7
-    expose:
-      - "2181"
-    volumes:
-      - "zookeeper_data:/bitnami"
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
   kafka:
-    image: soveren/kafka:wm-2.13-2.7.1
+    image: soveren/kafka:kraft
+    command: ["--override", "advertised.listeners=PLAINTEXT://kafka:9092", "--override", "log.retention.hours=1", "--override", "log.retention.bytes=268435456", "--override", "auto.create.topics.enable=false"]
     expose:
      - "9092"
-    volumes:
-      - "kafka_data:/kafka"
     environment:
-      - KAFKA_BROKER_ID=0
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-      # pre-creating topics with given number of partitions
-      - KAFKA_CREATE_TOPICS=alive:1:1,events:10:1:compact
-      - KAFKA_ALLOW_AUTOCREATE_TOPICS=false
-      # configure listener (plaintext only)
-      - KAFKA_ADVERTISED_LISTENERS=INSIDE://kafka:9092
-      - KAFKA_LISTENERS=INSIDE://kafka:9092
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INSIDE:PLAINTEXT
-      - KAFKA_INTER_BROKER_LISTENER_NAME=INSIDE
-      # one hour retention
-      - KAFKA_LOG_RETENTION_MS=3600000
-      # 256mb retention
-      - KAFKA_LOG_RETENTION_BYTES=268435456
+      - KAFKA_CREATE_TOPICS=alive:1:1,events:10:1
 
 volumes:
-  zookeeper_data:
-    driver: local
   kafka_data:
     driver: local
