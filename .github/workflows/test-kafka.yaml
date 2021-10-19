@@ -16,6 +16,14 @@ jobs:
         run: |
           cd test/soveren-middleware-chaos
           docker-compose up -d
+
+          # wait until env is up
+          t=0
+          while (( t <= 30 )); do
+            (( t+=1 ))
+            curl localhost:8090/get | grep 'OK: backend'
+            [[ $? -eq 0 ]] && break || sleep 1
+          done
           curl -v localhost:8090/get-json; echo
 
       - name: Run some ab instances
