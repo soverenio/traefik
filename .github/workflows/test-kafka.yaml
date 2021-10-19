@@ -16,6 +16,7 @@ jobs:
         run: |
           cd test/soveren-middleware-chaos
           docker-compose up -d
+          curl -v localhost:8090/get-json; echo
 
       - name: Run some ab instances
         run: |
@@ -24,9 +25,11 @@ jobs:
           echo $! > ab1.pid
           ab -c 1 -t 600 -s 1 http://localhost:8090/get-json &> ab2.log &
           echo $! > ab2.pid
+          curl -v localhost:8090/get-json; echo
 
       - name: Mess with zookeeper
         run: |
+          curl -v localhost:8090/get-json; echo
           cd test/soveren-middleware-chaos
           docker-compose restart zookeeper
           sleep 10
@@ -34,6 +37,7 @@ jobs:
           sleep 3
           docker-compose start zookeeper
           sleep 10
+          curl -v localhost:8090/get-json; echo
 
           # check if ab still running
           if kill -0 $(cat ab1.pid ab2.pid); then
@@ -47,6 +51,7 @@ jobs:
 
       - name: Mess with kafka
         run: |
+          curl -v localhost:8090/get-json; echo
           cd test/soveren-middleware-chaos
           docker-compose restart kafka
           sleep 10
@@ -54,6 +59,7 @@ jobs:
           sleep 3
           docker-compose start kafka
           sleep 10
+          curl -v localhost:8090/get-json; echo
 
           # check if ab still running
           if kill -0 $(cat ab1.pid ab2.pid); then
@@ -68,6 +74,7 @@ jobs:
 
       - name: Stop ab and show its logs
         run: |
+          curl -v localhost:8090/get-json; echo
           cd test/soveren-middleware-chaos
           # stop ab
           kill -2 $(cat ab1.pid)
@@ -79,3 +86,4 @@ jobs:
           cat ab2.log
           docker-compose logs proxy
           docker-compose logs backend
+          curl -v localhost:8090/get-json; echo
