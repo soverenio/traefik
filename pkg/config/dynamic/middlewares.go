@@ -507,7 +507,7 @@ func (c *ClientTLS) CreateTLSConfig() (*tls.Config, error) {
 // Replicate holds the configuration of the Replicate middleware.
 type Replicate struct {
 	Topic                  string   `json:"topic,omitempty" toml:"topic,omitempty" yaml:"topic,omitempty" export:"true"`
-	AliveTopic             string   `json:"aliveTopic,omitempty" toml:"aliveTopic,omitempty" yaml:"aliveTopic,omitempty" export:"true"`
+	HeartbeatTopic         string   `json:"heartbeatTopic,omitempty" toml:"heartbeatTopic,omitempty" yaml:"heartbeatTopic,omitempty" export:"true"`
 	WorkerPoolSize         int      `json:"poolSize,omitempty" toml:"poolSize,omitempty" yaml:"poolSize,omitempty" export:"true"`
 	Brokers                []string `json:"brokers,omitempty" toml:"brokers,omitempty" yaml:"brokers,omitempty" export:"true"`
 	MaxProcessableBodySize int      `json:"maxProcessableBodySize,omitempty" toml:"maxProcessableBodySize,omitempty" yaml:"maxProcessableBodySize,omitempty" export:"true"`

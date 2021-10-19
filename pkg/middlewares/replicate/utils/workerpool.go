@@ -55,7 +55,7 @@ func NewLimitPool(parentCtx context.Context, poolSize int) *WorkerPool {
 	return &WorkerPool{
 		ctx:         ctx,
 		workerCount: poolSize,
-		jobs:        newSyncWriteQueue(DefaultPoolSize),
+		jobs:        newSyncWriteQueue(poolSize),
 		cancel:      cancel,
 	}
 }
@@ -73,6 +73,16 @@ func (p *WorkerPool) Start() {
 // Do appends job to execution queue.
 func (p *WorkerPool) Do(makeFunc func()) {
 	p.jobs.Enqueue(makeFunc)
+}
+
+// LoadDiscarded returns count of discarded jobs.
+func (p *WorkerPool) LoadDiscarded() uint64 {
+	return p.jobs.discarded.Load()
+}
+
+// AddDiscarded adds delta to discarded jobs counter.
+func (p *WorkerPool) AddDiscarded(delta uint64) {
+	p.jobs.discarded.Add(delta)
 }
 
 // Stop workers in pool.
