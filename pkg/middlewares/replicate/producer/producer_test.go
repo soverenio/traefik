@@ -35,7 +35,7 @@ func TestNewKafkaPublisher(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			publisher, err := NewKafkaPublisher(tc.topic, tc.brokers)
+			publisher, err := NewKafkaPublisher(tc.topic, tc.topic, tc.brokers)
 
 			assert.Error(t, err)
 			assert.Nil(t, publisher)

@@ -23,6 +23,15 @@ type Event struct {
 	Time     time.Time `json:"time"`
 }
 
+// Heartbeat is message with info about replicate middleware status. This message send to kafka.
+type Heartbeat struct {
+	Host       string    `json:"host"`
+	Time       time.Time `json:"time"`
+	Discarded  uint64    `json:"discarded"`
+	Failed     uint64    `json:"failed"`
+	Successful uint64    `json:"successful"`
+}
+
 // Payload body and headers of  request and response.
 type Payload struct {
 	Body    string              `json:"body"`
@@ -31,30 +40,35 @@ type Payload struct {
 
 // Producer is interface for send message in message brokers.
 type Producer interface {
-	Produce(event Event) error
-	ProduceTo(event Event, topic string) error
+	ProduceEvent(event Event) error
+	ProduceHeartbeat(event Heartbeat) error
 }
 
 // KafkaPublisher publisher for kafka.
 type KafkaPublisher struct {
 	message.Publisher
-	brokers []string
-	topic   string
+	brokers        []string
+	topic          string
+	heartbeatTopic string
 }
 
 // NewKafkaPublisher create new KafkaPublisher.
-func NewKafkaPublisher(topic string, brokers []string) (*KafkaPublisher, error) {
+func NewKafkaPublisher(topic, heartbeatTopic string, brokers []string) (*KafkaPublisher, error) {
 	if topic == "" {
 		return nil, errors.New("topic is required")
+	}
+	if heartbeatTopic == "" {
+		return nil, errors.New("heartbeat topic is required")
 	}
 	if len(brokers) == 0 {
 		return nil, errors.New("at least one broker is required")
 	}
 
 	return &KafkaPublisher{
-		Publisher: nil,
-		topic:     topic,
-		brokers:   brokers,
+		Publisher:      nil,
+		topic:          topic,
+		heartbeatTopic: heartbeatTopic,
+		brokers:        brokers,
 	}, nil
 }
 
@@ -84,13 +98,18 @@ func (p *KafkaPublisher) Connect(ctx context.Context) {
 	}
 }
 
-// Produce send event to kafka.
-func (p *KafkaPublisher) Produce(ev Event) error {
-	return p.ProduceTo(ev, p.topic)
+// ProduceEvent send event to kafka.
+func (p *KafkaPublisher) ProduceEvent(ev Event) error {
+	return p.produceTo(ev, p.topic)
+}
+
+// ProduceHeartbeat send heartbeat to kafka.
+func (p *KafkaPublisher) ProduceHeartbeat(ev Heartbeat) error {
+	return p.produceTo(ev, p.heartbeatTopic)
 }
 
 // ProduceTo send event to kafka in specific topic.
-func (p *KafkaPublisher) ProduceTo(ev Event, topic string) error {
+func (p *KafkaPublisher) produceTo(ev interface{}, topic string) error {
 	if topic == "" {
 		return errors.New("topic is required")
 	}
