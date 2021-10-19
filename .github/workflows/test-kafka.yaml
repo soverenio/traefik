@@ -20,9 +20,9 @@ jobs:
       - name: Run some ab instances
         run: |
           cd test/soveren-middleware-chaos
-          ab -c 1 -t 600 -s 1 http://localhost:8090/get      > ab1.log &
+          ab -c 1 -t 600 -s 1 http://localhost:8090/get      &> ab1.log &
           echo $! > ab1.pid
-          ab -c 1 -t 600 -s 1 http://localhost:8090/get-json > ab2.log &
+          ab -c 1 -t 600 -s 1 http://localhost:8090/get-json &> ab2.log &
           echo $! > ab2.pid
 
       - name: Mess with zookeeper
@@ -74,6 +74,8 @@ jobs:
           kill -2 $(cat ab2.pid)
           sleep 1
 
-          # show ab logs
+          # show logs
           cat ab1.log
           cat ab2.log
+          docker-compose logs proxy
+          docker-compose logs backend
