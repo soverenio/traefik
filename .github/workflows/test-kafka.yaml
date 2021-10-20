@@ -31,9 +31,9 @@ jobs:
 
       - name: Run some ab instances
         run: |
-          ab -c 1 -t 600 -s 1 http://localhost:8090/get      &> ab1.log &
+          ab -c 1 -t 600 -n 500000 -s 1 http://localhost:8090/get      &> ab1.log &
           echo $! > ab1.pid
-          ab -c 1 -t 600 -s 1 http://localhost:8090/get-json &> ab2.log &
+          ab -c 1 -t 600 -n 500000 -s 1 http://localhost:8090/get-json &> ab2.log &
           echo $! > ab2.pid
 
       - name: Restart kafka
