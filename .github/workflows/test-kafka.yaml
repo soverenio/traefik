@@ -64,13 +64,22 @@ jobs:
           curl -v localhost:8090/get-json; echo
           cd test/soveren-middleware-chaos
           # stop ab
-          kill -2 $(cat ab1.pid)
-          kill -2 $(cat ab2.pid)
+          kill -2 $(cat ab1.pid ab2.pid)
           sleep 1
 
           # show logs
           cat ab1.log
           cat ab2.log
-          docker-compose logs proxy
-          docker-compose logs backend
           curl -v localhost:8090/get-json; echo
+
+      - name: Show kafka logs
+        run: |
+          docker-compose logs kafka
+
+      - name: Show backend logs
+        run: |
+          docker-compose logs backend
+
+      - name: Show proxy logs
+        run: |
+          docker-compose logs proxy
