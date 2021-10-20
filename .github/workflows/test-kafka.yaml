@@ -74,12 +74,15 @@ jobs:
 
       - name: Show kafka logs
         run: |
+          cd test/soveren-middleware-chaos
           docker-compose logs kafka
 
       - name: Show backend logs
         run: |
+          cd test/soveren-middleware-chaos
           docker-compose logs backend
 
       - name: Show proxy logs
         run: |
+          cd test/soveren-middleware-chaos
           docker-compose logs proxy
