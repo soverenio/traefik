@@ -94,9 +94,9 @@ jobs:
 
       - name: Remove and create topic in kafka
         run: |
-          docker-compose exec kafka bin/kafka-topics.sh --delete --topic events --bootstrap-server kafka:9092
+          docker-compose exec -T kafka bin/kafka-topics.sh --delete --topic events --bootstrap-server kafka:9092
           sleep 10
-          docker-compose exec kafka bin/kafka-topics.sh --create --topic events --bootstrap-server kafka:9092 --replication-factor 1 --partitions 10
+          docker-compose exec -T kafka bin/kafka-topics.sh --create --topic events --bootstrap-server kafka:9092 --replication-factor 1 --partitions 10
           sleep 10
 
           # check if ab still running
