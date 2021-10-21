@@ -35,6 +35,8 @@ jobs:
           echo $! > ab1.pid
           ab -c 1 -t 600 -n 500000 -s 1 http://localhost:8090/get-json &> ab2.log &
           echo $! > ab2.pid
+          ab -c 1 -t 600 -n 500000 -s 1 -T application/json -p post_data.json http://localhost:8090/get-json &> ab3.log &
+          echo $! > ab3.pid
 
       - name: Restart kafka
         run: |
@@ -43,11 +45,12 @@ jobs:
           sleep 10
 
           # check if ab still running
-          if kill -0 $(cat ab1.pid ab2.pid); then
+          if kill -0 $(cat ab1.pid ab2.pid ab3.pid); then
             echo "ab still working"
           else
             cat ab1.log
             cat ab2.log
+            cat ab3.log
             docker-compose ps
             docker-compose logs proxy
             docker-compose logs backend
@@ -62,11 +65,12 @@ jobs:
           sleep 10
 
           # check if ab still running
-          if kill -0 $(cat ab1.pid ab2.pid); then
+          if kill -0 $(cat ab1.pid ab2.pid ab3.pid); then
             echo "ab still working"
           else
             cat ab1.log
             cat ab2.log
+            cat ab3.log
             docker-compose ps
             docker-compose logs proxy
             docker-compose logs backend
@@ -81,11 +85,12 @@ jobs:
           sleep 10
 
           # check if ab still running
-          if kill -0 $(cat ab1.pid ab2.pid); then
+          if kill -0 $(cat ab1.pid ab2.pid ab3.pid); then
             echo "ab still working"
           else
             cat ab1.log
             cat ab2.log
+            cat ab3.log
             docker-compose ps
             docker-compose logs proxy
             docker-compose logs backend
@@ -100,11 +105,12 @@ jobs:
           sleep 10
 
           # check if ab still running
-          if kill -0 $(cat ab1.pid ab2.pid); then
+          if kill -0 $(cat ab1.pid ab2.pid ab3.pid); then
             echo "ab still working"
           else
             cat ab1.log
             cat ab2.log
+            cat ab3.log
             docker-compose ps
             docker-compose logs proxy
             docker-compose logs backend
@@ -114,12 +120,13 @@ jobs:
       - name: Stop ab and show its logs
         run: |
           # stop ab
-          kill -2 $(cat ab1.pid ab2.pid)
+          kill -2 $(cat ab1.pid ab2.pid ab3.pid)
           sleep 1
 
           # show logs
           cat ab1.log
           cat ab2.log
+          cat ab3.log
 
       - name: Show kafka logs
         run: |
