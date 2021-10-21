@@ -3,7 +3,7 @@ http:
     soveren:
       replicate:
         topic: events
-        alivetopic: alive
+        heartbeattopic: heartbeat
         workerpoolsize: 10
         brokers:
           - kafka:9092
