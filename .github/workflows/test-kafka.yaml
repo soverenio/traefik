@@ -1,9 +1,9 @@
 name: Messing with kafka
 
 on:
-  push:
+  pull_request:
     branches:
-      - 'SMAT-173_mess-with-kafka'
+      - '*'
 
 jobs:
   test-kafka:
