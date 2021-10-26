@@ -1,0 +1,9 @@
+http:
+  middlewares:
+    soveren:
+      replicate:
+        topic: events
+        heartbeattopic: heartbeat
+        workerpoolsize: 10
+        brokers:
+          - kafka:9092
