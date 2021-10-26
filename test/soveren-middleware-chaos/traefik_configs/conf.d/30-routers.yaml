@@ -1,0 +1,9 @@
+http:
+  routers:
+    defaults:
+      entryPoints:
+        - web
+      rule: PathPrefix(`/`)
+      middlewares:
+        - soveren
+      service: upstream

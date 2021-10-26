@@ -1,0 +1,141 @@
+name: Messing with kafka
+
+on:
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  test-kafka:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: test/soveren-middleware-chaos
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@master
+
+      - name: Setup test environment
+        run: |
+          docker-compose up -d
+
+          # wait until env is up
+          sleep 3
+          t=0
+          while (( t <= 30 )); do
+            (( t+=1 ))
+            curl localhost:8090/get | grep 'OK: backend'
+            [[ $? -eq 0 ]] && break || sleep 1
+          done
+          curl -v localhost:8090/get-json; echo
+
+      - name: Run some ab instances
+        run: |
+          ab -c 1 -t 600 -n 500000 -s 1 http://localhost:8090/get      &> ab1.log &
+          echo $! > ab1.pid
+          ab -c 1 -t 600 -n 500000 -s 1 http://localhost:8090/get-json &> ab2.log &
+          echo $! > ab2.pid
+          ab -c 1 -t 600 -n 500000 -s 1 -T application/json -p post_data.json http://localhost:8090/get-json &> ab3.log &
+          echo $! > ab3.pid
+
+      - name: Restart kafka
+        run: |
+          sleep 10
+          docker-compose restart kafka
+          sleep 10
+
+          # check if ab still running
+          if kill -0 $(cat ab1.pid ab2.pid ab3.pid); then
+            echo "ab still working"
+          else
+            cat ab1.log
+            cat ab2.log
+            cat ab3.log
+            docker-compose ps
+            docker-compose logs proxy
+            docker-compose logs backend
+            exit 1
+          fi
+
+      - name: Kill kafka
+        run: |
+          docker-compose kill kafka
+          sleep 10
+          docker-compose start kafka
+          sleep 10
+
+          # check if ab still running
+          if kill -0 $(cat ab1.pid ab2.pid ab3.pid); then
+            echo "ab still working"
+          else
+            cat ab1.log
+            cat ab2.log
+            cat ab3.log
+            docker-compose ps
+            docker-compose logs proxy
+            docker-compose logs backend
+            exit 1
+          fi
+
+      - name: Pause kafka
+        run: |
+          docker-compose pause kafka
+          sleep 10
+          docker-compose unpause kafka
+          sleep 10
+
+          # check if ab still running
+          if kill -0 $(cat ab1.pid ab2.pid ab3.pid); then
+            echo "ab still working"
+          else
+            cat ab1.log
+            cat ab2.log
+            cat ab3.log
+            docker-compose ps
+            docker-compose logs proxy
+            docker-compose logs backend
+            exit 1
+          fi
+
+      - name: Remove and create topic in kafka
+        run: |
+          docker-compose exec -T kafka bin/kafka-topics.sh --delete --topic events --bootstrap-server kafka:9092
+          sleep 10
+          docker-compose exec -T kafka bin/kafka-topics.sh --create --topic events --bootstrap-server kafka:9092 --replication-factor 1 --partitions 10
+          sleep 10
+
+          # check if ab still running
+          if kill -0 $(cat ab1.pid ab2.pid ab3.pid); then
+            echo "ab still working"
+          else
+            cat ab1.log
+            cat ab2.log
+            cat ab3.log
+            docker-compose ps
+            docker-compose logs proxy
+            docker-compose logs backend
+            exit 1
+          fi
+
+      - name: Stop ab and show its logs
+        run: |
+          # stop ab
+          kill -2 $(cat ab1.pid ab2.pid ab3.pid)
+          sleep 1
+
+          # show logs
+          cat ab1.log
+          cat ab2.log
+          cat ab3.log
+
+      - name: Show kafka logs
+        run: |
+          docker-compose logs kafka
+
+      - name: Show backend logs
+        run: |
+          docker-compose logs backend
+
+      - name: Show proxy logs
+        run: |
+          docker-compose logs proxy

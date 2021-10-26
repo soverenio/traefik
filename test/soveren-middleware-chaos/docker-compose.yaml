@@ -1,0 +1,29 @@
+version: "3"
+
+services:
+  backend:
+    image: nginx
+    expose:
+      - "8080"
+    volumes:
+      - ./backend.conf:/etc/nginx/conf.d/backend.conf
+  proxy:
+    image: soveren/traefik-exp:local
+    build:
+      context: ../..
+      dockerfile: exp.Dockerfile
+    ports:
+      - "8090:8090"
+    environment:
+      TRAEFIK_LOG_LEVEL: INFO
+      TRAEFIK_PROVIDERS_FILE_DIRECTORY: /etc/traefik/conf/conf.d/
+      TRAEFIK_ENTRYPOINTS_WEB_ADDRESS: ":8090"
+    volumes:
+      - ./traefik_configs:/etc/traefik/conf
+  kafka:
+    image: soveren/kafka:kraft
+    command: ["--override", "advertised.listeners=PLAINTEXT://kafka:9092", "--override", "log.retention.hours=1", "--override", "log.retention.bytes=268435456", "--override", "auto.create.topics.enable=false"]
+    expose:
+     - "9092"
+    environment:
+      - KAFKA_CREATE_TOPICS=heartbeat:1:1,events:10:1
