@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/traefik/traefik/v2/cmd/confik"
+
 	"github.com/coreos/go-systemd/daemon"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/go-acme/lego/v4/challenge"
@@ -72,6 +74,8 @@ Complete documentation is available at https://traefik.io`,
 		stdlog.Println(err)
 		os.Exit(1)
 	}
+
+	err = cmdTraefik.AddCommand(confik.NewCmd(&tConfig.Configuration, loaders))
 
 	err = cli.Execute(cmdTraefik)
 	if err != nil {
