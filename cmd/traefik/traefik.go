@@ -76,6 +76,10 @@ Complete documentation is available at https://traefik.io`,
 	}
 
 	err = cmdTraefik.AddCommand(confik.NewCmd(&tConfig.Configuration, loaders))
+	if err != nil {
+		stdlog.Println(err)
+		os.Exit(1)
+	}
 
 	err = cli.Execute(cmdTraefik)
 	if err != nil {
