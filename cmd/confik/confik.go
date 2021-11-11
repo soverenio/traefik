@@ -25,6 +25,12 @@ func mergeWith(svrnProvider *soveren.Provider, fileProvider *file.Provider) func
 			log.WithoutContext().Error("error using soveren or file configuration provider, one of the configs is not enough")
 			return
 		}
+
+		if msg.ProviderName == "file" {
+			log.WithoutContext().Info("Skipping configuration updates from file provider")
+			return
+		}
+
 		conf := msg.Configuration
 		conf.HTTP.Middlewares["soveren"] = &dynamic.Middleware{
 			Replicate: &svrnProvider.Replicate,
