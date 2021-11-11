@@ -2,14 +2,12 @@ package confik
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
+	"github.com/traefik/traefik/v2/pkg/provider/file"
 	"github.com/traefik/traefik/v2/pkg/provider/soveren"
 
 	"github.com/traefik/traefik/v2/pkg/config/dynamic"
@@ -21,20 +19,23 @@ import (
 	"github.com/traefik/paerser/cli"
 )
 
-func mergeWith(provider *soveren.Provider) func(dynamic.Message) {
+func mergeWith(svrnProvider *soveren.Provider, fileProvider *file.Provider) func(dynamic.Message) {
 	return func(msg dynamic.Message) {
-		//ctx := context.Background()
+		if svrnProvider == nil || fileProvider == nil {
+			log.WithoutContext().Error("error using soveren or file configuration provider, one of the configs is not enough")
+			return
+		}
 		conf := msg.Configuration
 		conf.HTTP.Middlewares["soveren"] = &dynamic.Middleware{
-			Replicate: &provider.Replicate,
+			Replicate: &svrnProvider.Replicate,
 		}
 		for _, router := range conf.HTTP.Routers {
 			router.Middlewares = append(router.Middlewares, "soveren")
 		}
-
-		// TODO: save updates to config file
-		out, _ := yaml.Marshal(conf)
-		fmt.Println(string(out))
+		err := saveConfiguration(fileProvider.Filename, fileProvider.Directory, conf)
+		if err != nil {
+			log.WithoutContext().Error(err.Error())
+		}
 	}
 }
 
@@ -76,7 +77,7 @@ func setupDaemon(staticConfiguration *static.Configuration) *Daemon {
 		"",
 	)
 
-	watcher.AddListener(mergeWith(staticConfiguration.Providers.Soveren))
+	watcher.AddListener(mergeWith(staticConfiguration.Providers.Soveren, staticConfiguration.Providers.File))
 
 	return &Daemon{
 		watcher:      watcher,
