@@ -23,8 +23,10 @@ func NewMetricServer(cfg *StaticConfiguration,
 	if cfg.Metrics != nil && cfg.Metrics.Prometheus != nil {
 		metricsHandler := metrics.PrometheusHandler()
 		if ep, ok := cfg.EntryPoints[cfg.Metrics.Prometheus.EntryPoint]; ok {
+			mux := http.NewServeMux()
+			mux.Handle("/metrics", metricsHandler)
 			srv = &http.Server{
-				Handler: metricsHandler,
+				Handler: mux,
 				Addr:    ep.Address,
 			}
 		}
