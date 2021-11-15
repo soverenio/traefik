@@ -1,4 +1,4 @@
-package configwatcher
+package main
 
 import (
 	"errors"
