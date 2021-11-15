@@ -13,13 +13,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/traefik/traefik/v2/cmd/confik"
-
 	"github.com/coreos/go-systemd/daemon"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/go-acme/lego/v4/challenge"
 	"github.com/sirupsen/logrus"
 	"github.com/traefik/paerser/cli"
+	"github.com/vulcand/oxy/roundrobin"
+
 	"github.com/traefik/traefik/v2/autogen/genstatic"
 	"github.com/traefik/traefik/v2/cmd"
 	"github.com/traefik/traefik/v2/cmd/healthcheck"
@@ -43,7 +43,6 @@ import (
 	traefiktls "github.com/traefik/traefik/v2/pkg/tls"
 	"github.com/traefik/traefik/v2/pkg/types"
 	"github.com/traefik/traefik/v2/pkg/version"
-	"github.com/vulcand/oxy/roundrobin"
 )
 
 func main() {
@@ -70,12 +69,6 @@ Complete documentation is available at https://traefik.io`,
 	}
 
 	err = cmdTraefik.AddCommand(cmdVersion.NewCmd())
-	if err != nil {
-		stdlog.Println(err)
-		os.Exit(1)
-	}
-
-	err = cmdTraefik.AddCommand(confik.NewCmd(&tConfig.Configuration, loaders))
 	if err != nil {
 		stdlog.Println(err)
 		os.Exit(1)

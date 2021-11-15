@@ -1,4 +1,4 @@
-package confik
+package configwatcher
 
 import (
 	"errors"
