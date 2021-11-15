@@ -23,7 +23,6 @@ import (
 	"github.com/traefik/traefik/v2/cmd/confik/configwatcher"
 	"github.com/traefik/traefik/v2/cmd/healthcheck"
 	tcli "github.com/traefik/traefik/v2/pkg/cli"
-	"github.com/traefik/traefik/v2/pkg/collector"
 	"github.com/traefik/traefik/v2/pkg/config/static"
 	"github.com/traefik/traefik/v2/pkg/log"
 	"github.com/traefik/traefik/v2/pkg/safe"
@@ -89,13 +88,6 @@ func runCmd(staticConfiguration *static.Configuration) error {
 	if staticConfiguration.API != nil && staticConfiguration.API.Dashboard {
 		staticConfiguration.API.DashboardAssets = &assetfs.AssetFS{Asset: genstatic.Asset, AssetInfo: genstatic.AssetInfo, AssetDir: genstatic.AssetDir, Prefix: "static"}
 	}
-
-	if staticConfiguration.Global.CheckNewVersion {
-		checkNewVersion()
-	}
-
-	stats(staticConfiguration)
-
 	ctx, _ := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 
 	if staticConfiguration.Experimental != nil && staticConfiguration.Experimental.DevPlugin != nil {
@@ -194,42 +186,4 @@ func configureLogging(staticConfiguration *static.Configuration) {
 			log.WithoutContext().Errorf("Error while opening log file %s: %v", logFile, err)
 		}
 	}
-}
-
-func checkNewVersion() {
-	ticker := time.Tick(24 * time.Hour)
-	safe.Go(func() {
-		for time.Sleep(10 * time.Minute); ; <-ticker {
-			version.CheckNewVersion()
-		}
-	})
-}
-
-func stats(staticConfiguration *static.Configuration) {
-	logger := log.WithoutContext()
-
-	if staticConfiguration.Global.SendAnonymousUsage {
-		logger.Info(`Stats collection is enabled.`)
-		logger.Info(`Many thanks for contributing to Traefik's improvement by allowing us to receive anonymous information from your configuration.`)
-		logger.Info(`Help us improve Traefik by leaving this feature on :)`)
-		logger.Info(`More details on: https://doc.traefik.io/traefik/contributing/data-collection/`)
-		collect(staticConfiguration)
-	} else {
-		logger.Info(`
-Stats collection is disabled.
-Help us improve Traefik by turning this feature on :)
-More details on: https://doc.traefik.io/traefik/contributing/data-collection/
-`)
-	}
-}
-
-func collect(staticConfiguration *static.Configuration) {
-	ticker := time.Tick(24 * time.Hour)
-	safe.Go(func() {
-		for time.Sleep(10 * time.Minute); ; <-ticker {
-			if err := collector.Collect(staticConfiguration); err != nil {
-				log.WithoutContext().Debug(err)
-			}
-		}
-	})
 }
