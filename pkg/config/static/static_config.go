@@ -2,7 +2,6 @@ package static
 
 import (
 	"fmt"
-	"github.com/traefik/traefik/v2/pkg/provider/soveren"
 	stdlog "log"
 	"strings"
 	"time"
@@ -187,8 +186,6 @@ type Providers struct {
 	ZooKeeper *zk.Provider     `description:"Enable ZooKeeper backend with default settings." json:"zooKeeper,omitempty" toml:"zooKeeper,omitempty" yaml:"zooKeeper,omitempty" label:"allowEmpty" file:"allowEmpty" export:"true"`
 	Redis     *redis.Provider  `description:"Enable Redis backend with default settings." json:"redis,omitempty" toml:"redis,omitempty" yaml:"redis,omitempty" label:"allowEmpty" file:"allowEmpty" export:"true"`
 	HTTP      *http.Provider   `description:"Enable HTTP backend with default settings." json:"http,omitempty" toml:"http,omitempty" yaml:"http,omitempty" label:"allowEmpty" file:"allowEmpty" export:"true"`
-
-	Soveren *soveren.Provider `description:"Enable Soveren provider with default settings." json:"soveren,omitempty" toml:"soveren,omitempty" yaml:"soveren,omitempty" export:"true" label:"allowEmpty" file:"allowEmpty"`
 }
 
 // SetEffectiveConfiguration adds missing configuration parameters derived from existing ones.

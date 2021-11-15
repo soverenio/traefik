@@ -17,11 +17,11 @@ const (
 	perm            = os.FileMode(0777)
 )
 
-func saveConfiguration(filename, directory string, conf *dynamic.Configuration) error {
+func saveConfiguration(directory string, conf *dynamic.Configuration) error {
 	if conf == nil {
 		return nil
 	}
-	filename, err := genFileName(filename, directory)
+	filename, err := genFileName("", directory)
 	if err != nil {
 		return err
 	}

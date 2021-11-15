@@ -10,14 +10,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
-	"github.com/traefik/traefik/v2/cmd"
+	ptypes "github.com/traefik/paerser/types"
+
 	tcli "github.com/traefik/traefik/v2/pkg/cli"
 	"github.com/traefik/traefik/v2/pkg/metrics"
 	"github.com/traefik/traefik/v2/pkg/types"
 
-	"github.com/traefik/traefik/v2/pkg/provider/file"
-	"github.com/traefik/traefik/v2/pkg/provider/soveren"
+	"github.com/sirupsen/logrus"
 
 	"github.com/traefik/traefik/v2/pkg/config/dynamic"
 	"github.com/traefik/traefik/v2/pkg/config/static"
@@ -29,12 +28,12 @@ import (
 )
 
 func main() {
-	// traefik config inits
-	tConfig := cmd.NewTraefikConfiguration()
+	// confik settings
+	cfg := NewStaticConfiguration()
 
 	loaders := []cli.ResourceLoader{&tcli.FileLoader{}, &tcli.FlagLoader{}, &tcli.EnvLoader{}}
 
-	cmdConfik := NewCmd(&tConfig.Configuration, loaders)
+	cmdConfik := NewCmd(cfg, loaders)
 
 	err := cli.Execute(cmdConfik)
 	if err != nil {
@@ -45,7 +44,7 @@ func main() {
 	logrus.Exit(0)
 }
 
-func configureLogging(staticConfiguration *static.Configuration) {
+func configureLogging(staticConfiguration *StaticConfiguration) {
 	// configure default log flags
 	stdlog.SetFlags(stdlog.Lshortfile | stdlog.LstdFlags)
 
@@ -98,33 +97,59 @@ func configureLogging(staticConfiguration *static.Configuration) {
 	}
 }
 
-func mergeWith(svrnProvider *soveren.Provider, fileProvider *file.Provider) func(dynamic.Message) {
+type StaticConfiguration struct {
+	Providers   *static.Providers
+	EntryPoints static.EntryPoints `description:"Entry points definition." json:"entryPoints,omitempty" toml:"entryPoints,omitempty" yaml:"entryPoints,omitempty" export:"true"`
+	Metrics     *types.Metrics     `description:"Enable a metrics exporter." json:"metrics,omitempty" toml:"metrics,omitempty" yaml:"metrics,omitempty" export:"true"`
+	Log         *types.TraefikLog  `description:"Confik log settings." json:"log,omitempty" toml:"log,omitempty" yaml:"log,omitempty" label:"allowEmpty" file:"allowEmpty" export:"true"`
+
+	OutputDirectory string `description:"Save dynamic configuration to directory." json:"output_directory,omitempty" toml:"output_directory,omitempty" yaml:"output_directory,omitempty" export:"true"`
+	MiddlewareName  string `description:"Name of injected middleware." json:"middleware_name,omitempty" toml:"middleware_name,omitempty" yaml:"middleware_name,omitempty" export:"true"`
+}
+
+func NewStaticConfiguration() *StaticConfiguration {
+	return &StaticConfiguration{
+		Providers: &static.Providers{
+			ProvidersThrottleDuration: ptypes.Duration(2 * time.Second),
+		},
+		EntryPoints: make(static.EntryPoints),
+	}
+}
+
+func export(staticConf *StaticConfiguration) func(dynamic.Message) {
 	return func(msg dynamic.Message) {
-		if svrnProvider == nil || fileProvider == nil {
-			log.WithoutContext().Error("error using soveren or file configuration provider, one of the configs is not enough")
+		if staticConf == nil {
+			log.WithoutContext().Info("StaticConfiguration is nil, exporting skipped")
 			return
 		}
-
-		if msg.ProviderName == "file" {
-			log.WithoutContext().Info("Skipping configuration updates from file provider")
+		if len(staticConf.OutputDirectory) == 0 || len(staticConf.MiddlewareName) == 0 {
+			log.WithoutContext().Info("OutputDirectory or MiddlewareName is an empty, exporting skipped")
 			return
 		}
 
 		conf := msg.Configuration
-		conf.HTTP.Middlewares["soveren"] = &dynamic.Middleware{
-			Replicate: &svrnProvider.Replicate,
-		}
 		for _, router := range conf.HTTP.Routers {
-			router.Middlewares = append(router.Middlewares, "soveren")
+			skipRouter := false
+			for _, m := range router.Middlewares {
+				if m == staticConf.MiddlewareName {
+					skipRouter = true
+					break
+				}
+			}
+
+			if skipRouter {
+				continue
+			}
+			router.Middlewares = append(router.Middlewares, staticConf.MiddlewareName)
 		}
-		err := saveConfiguration(fileProvider.Filename, fileProvider.Directory, conf)
+		err := saveConfiguration(staticConf.OutputDirectory, conf)
 		if err != nil {
 			log.WithoutContext().Error(err.Error())
 		}
 	}
 }
 
-func NewCmd(traefikConfiguration *static.Configuration, loaders []cli.ResourceLoader) *cli.Command {
+func NewCmd(traefikConfiguration *StaticConfiguration, loaders []cli.ResourceLoader) *cli.Command {
 	return &cli.Command{
 		Name:          "confik",
 		Description:   `Run daemon that listens to some of the configuration providers, injects auxiliary properties then projects combined version to config destination`,
@@ -136,7 +161,7 @@ func NewCmd(traefikConfiguration *static.Configuration, loaders []cli.ResourceLo
 	}
 }
 
-func runCmd(staticConfiguration *static.Configuration) error {
+func runCmd(staticConfiguration *StaticConfiguration) error {
 	configureLogging(staticConfiguration)
 
 	svr := setupDaemon(staticConfiguration)
@@ -150,14 +175,15 @@ func runCmd(staticConfiguration *static.Configuration) error {
 	return nil
 }
 
-func setupDaemon(staticConfiguration *static.Configuration) *Daemon {
+func setupDaemon(staticConfiguration *StaticConfiguration) *Daemon {
 	providerAggregator := aggregator.NewProviderAggregator(*staticConfiguration.Providers)
 
 	ctx := context.Background()
 	routinesPool := safe.NewPool(ctx)
 
-	metricRegistries := registerMetricClients(staticConfiguration.Metrics)
-	metricsRegistry := metrics.NewMultiRegistry(metricRegistries)
+	registerMetricClients(staticConfiguration.Metrics)
+
+	metricServer := NewMetricServer(staticConfiguration, routinesPool)
 
 	watcher := NewConfigurationWatcher(
 		routinesPool,
@@ -167,19 +193,14 @@ func setupDaemon(staticConfiguration *static.Configuration) *Daemon {
 		"",
 	)
 
-	watcher.AddListener(mergeWith(staticConfiguration.Providers.Soveren, staticConfiguration.Providers.File))
-
-	// Metrics
-	watcher.AddListener(func(_ dynamic.Message) {
-		metricsRegistry.ConfigReloadsCounter().Add(1)
-		metricsRegistry.LastConfigReloadSuccessGauge().Set(float64(time.Now().Unix()))
-	})
+	watcher.AddListener(export(staticConfiguration))
 
 	return &Daemon{
 		watcher:      watcher,
 		signals:      make(chan os.Signal, 1),
 		stopChan:     make(chan bool, 1),
 		routinesPool: routinesPool,
+		metricSrv:    metricServer,
 	}
 }
 
@@ -197,27 +218,6 @@ func registerMetricClients(metricsConfig *types.Metrics) []metrics.Registry {
 			registries = append(registries, prometheusRegister)
 			log.FromContext(ctx).Debug("Configured Prometheus metrics")
 		}
-	}
-
-	if metricsConfig.Datadog != nil {
-		ctx := log.With(context.Background(), log.Str(log.MetricsProviderName, "datadog"))
-		registries = append(registries, metrics.RegisterDatadog(ctx, metricsConfig.Datadog))
-		log.FromContext(ctx).Debugf("Configured Datadog metrics: pushing to %s once every %s",
-			metricsConfig.Datadog.Address, metricsConfig.Datadog.PushInterval)
-	}
-
-	if metricsConfig.StatsD != nil {
-		ctx := log.With(context.Background(), log.Str(log.MetricsProviderName, "statsd"))
-		registries = append(registries, metrics.RegisterStatsd(ctx, metricsConfig.StatsD))
-		log.FromContext(ctx).Debugf("Configured StatsD metrics: pushing to %s once every %s",
-			metricsConfig.StatsD.Address, metricsConfig.StatsD.PushInterval)
-	}
-
-	if metricsConfig.InfluxDB != nil {
-		ctx := log.With(context.Background(), log.Str(log.MetricsProviderName, "influxdb"))
-		registries = append(registries, metrics.RegisterInfluxDB(ctx, metricsConfig.InfluxDB))
-		log.FromContext(ctx).Debugf("Configured InfluxDB metrics: pushing to %s once every %s",
-			metricsConfig.InfluxDB.Address, metricsConfig.InfluxDB.PushInterval)
 	}
 
 	return registries

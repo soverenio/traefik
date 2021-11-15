@@ -21,6 +21,7 @@ func (s *Daemon) Start(ctx context.Context) {
 	}()
 
 	s.watcher.Start()
+	s.metricSrv.Start()
 }
 
 // Wait blocks until the server shutdown.
@@ -64,4 +65,5 @@ type Daemon struct {
 	stopChan chan bool
 
 	routinesPool *safe.Pool
+	metricSrv    *MetricServer
 }
