@@ -8,6 +8,7 @@ import (
 type recorder interface {
 	http.ResponseWriter
 	GetBody() *bytes.Buffer
+	GetStatusCode() int
 }
 
 func newResponseRecorder(rw http.ResponseWriter) recorder {
@@ -19,7 +20,8 @@ func newResponseRecorder(rw http.ResponseWriter) recorder {
 
 type responseRecorder struct {
 	http.ResponseWriter
-	body *bytes.Buffer
+	body       *bytes.Buffer
+	statusCode int
 }
 
 func (r responseRecorder) Write(bytes []byte) (int, error) {
@@ -28,4 +30,13 @@ func (r responseRecorder) Write(bytes []byte) (int, error) {
 
 func (r *responseRecorder) GetBody() *bytes.Buffer {
 	return r.body
+}
+
+func (r *responseRecorder) WriteHeader(statusCode int) {
+	r.statusCode = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (r *responseRecorder) GetStatusCode() int {
+	return r.statusCode
 }

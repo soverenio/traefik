@@ -117,6 +117,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	r.next.ServeHTTP(recorder, req)
 	responseBody := recorder.GetBody().Bytes()
 	responseHeaders := recorder.Header()
+	responseCode := recorder.GetStatusCode()
 
 	_, err = rw.Write(responseBody)
 	if err != nil {
@@ -160,13 +161,14 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		}
 
 		ev := producer.Event{
-			Method:   method,
-			URL:      URL,
-			Host:     host,
-			Client:   remoteAddr,
-			Request:  eventRequest,
-			Response: eventResponse,
-			Time:     time.Now().UTC(),
+			Method:       method,
+			URL:          URL,
+			Host:         host,
+			Client:       remoteAddr,
+			Request:      eventRequest,
+			Response:     eventResponse,
+			ResponseCode: responseCode,
+			Time:         time.Now().UTC(),
 		}
 
 		if !isVerifyEvent(ev) {
