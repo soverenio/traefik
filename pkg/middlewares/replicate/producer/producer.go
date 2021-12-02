@@ -14,13 +14,14 @@ import (
 
 // Event is message with info about request and response.This message send to kafka.
 type Event struct {
-	Method   string    `json:"method"`
-	URL      string    `json:"url"`
-	Host     string    `json:"host"`
-	Client   string    `json:"client"`
-	Request  Payload   `json:"request"`
-	Response Payload   `json:"response"`
-	Time     time.Time `json:"time"`
+	Method       string    `json:"method"`
+	URL          string    `json:"url"`
+	Host         string    `json:"host"`
+	Client       string    `json:"client"`
+	Request      Payload   `json:"request"`
+	Response     Payload   `json:"response"`
+	ResponseCode int       `json:"code"`
+	Time         time.Time `json:"time"`
 }
 
 // Heartbeat is message with info about replicate middleware status. This message send to kafka.
