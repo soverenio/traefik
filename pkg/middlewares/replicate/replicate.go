@@ -79,7 +79,8 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	switch {
 	case !isSupportedRequestFormat(req.Header.Get("Content-Type")):
-		logger.Debug("ignoring requests with header 'Content-Type' not 'application/json', setting Event.Request to '{}'")
+		logger.Debug("ignoring requests with header 'Content-Type' " +
+			"not 'application/json' or 'application/x-www-form-urlencoded', setting Event.Request to '{}'")
 	case req.ContentLength > int64(r.maxProcessableBodySize):
 		logger.Debugf("ignoring requests with too long body: body length is %d", req.ContentLength)
 		r.discardedRequests.Inc()
