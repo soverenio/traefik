@@ -182,7 +182,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 func isSupportedRequestFormat(format string) bool {
-	var supportedRequestFormat = []string{
+	supportedRequestFormat := []string{
 		"application/json",
 		"application/x-www-form-urlencoded",
 	}
