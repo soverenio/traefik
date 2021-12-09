@@ -18,7 +18,50 @@ import (
 )
 
 func TestReplicate(t *testing.T) {
-	t.Run("The middleware doesn't affect on request and response", func(t *testing.T) {
+	t.Run("Producer error causes, but handler return 200", func(t *testing.T) {
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, err := w.Write([]byte("body"))
+			require.NoError(t, err)
+		})
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		mockedProducer := MockEventProducer(func(event producer.Event) error {
+			wg.Done()
+			return errors.New("test-error")
+		})
+
+		ctx := context.Background()
+		replicate := replicate{
+			RWMutex:                sync.RWMutex{},
+			next:                   next,
+			name:                   "test-replicate",
+			producer:               mockedProducer,
+			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
+			maxProcessableBodySize: defaultMaxProcessableBodySize,
+			discardedRequests:      utils.NewSyncCounter(),
+			failedRequests:         utils.NewSyncCounter(),
+			successfulRequests:     utils.NewSyncCounter(),
+		}
+		replicate.wPool.Start()
+		defer func() {
+			wg.Wait()
+			replicate.wPool.Stop()
+			assert.EqualValues(t, 1, replicate.failedRequests.Load())
+			assert.EqualValues(t, 0, replicate.discardedRequests.Load())
+			assert.EqualValues(t, 0, replicate.successfulRequests.Load())
+		}()
+
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/test", nil)
+		replicate.ServeHTTP(recorder, request)
+
+		assert.Equal(t, http.StatusOK, recorder.Code, "status code must be 200")
+		assert.Equal(t, "body", recorder.Body.String(), "response body is correct")
+	})
+}
+
+func TestReplicate_content_type_header(t *testing.T) {
+	t.Run("process request and response with types application/json", func(t *testing.T) {
 		URL := "/test"
 		method := http.MethodPost
 		expectedBody := `{"key": "value"}`
@@ -99,26 +142,65 @@ func TestReplicate(t *testing.T) {
 		assert.Equal(t, headers[customHeaderKey][0], recorder.Header().Get(customHeaderKey), "response header was changed by the middleware")
 		assert.Equal(t, headers[contentTypeHeaderKey][0], recorder.Header().Get(contentTypeHeaderKey), "response header was changed by the middleware")
 	})
+	t.Run("skip request without required header", func(t *testing.T) {
+		URL := "/test"
+		method := http.MethodPost
+		expectedBody := `{"key": "value"}`
 
-	t.Run("Producer error causes, but handler return 200", func(t *testing.T) {
+		headersReq := make(map[string][]string, 2)
+		customHeaderKey := "X-Header"
+		headersReq[customHeaderKey] = []string{"header value"}
+
+		headersResp := make(map[string][]string, 2)
+		headersResp[customHeaderKey] = []string{"header value"}
+		contentTypeHeaderKey := "Content-Type"
+		headersResp[contentTypeHeaderKey] = []string{"application/json"}
+
+		expectedEvent := producer.Event{
+			Method: method,
+			URL:    URL,
+			Host:   "example.com",
+			Client: "192.0.2.1",
+			Request: producer.Payload{
+				Body:    emptyJSONBody,
+				Headers: map[string][]string{},
+			},
+			Response: producer.Payload{
+				Body:    expectedBody,
+				Headers: headersResp,
+			},
+		}
+
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, err := w.Write([]byte("body"))
+			body := r.Body
+			defer body.Close()
+
+			bytes, err := ioutil.ReadAll(body)
+			require.NoError(t, err)
+			assert.Equal(t, expectedBody, string(bytes), "request body was changed by the middleware")
+
+			w.Header().Set(contentTypeHeaderKey, headersResp[contentTypeHeaderKey][0])
+			w.Header().Set(customHeaderKey, headersResp[customHeaderKey][0])
+			_, err = w.Write([]byte(expectedBody))
 			require.NoError(t, err)
 		})
+
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 		mockedProducer := MockEventProducer(func(event producer.Event) error {
+			require.NotEmpty(t, event.Time)
+			expectedEvent.Time = event.Time
+			require.Equal(t, expectedEvent, event)
 			wg.Done()
-			return errors.New("test-error")
+			return nil
 		})
 
-		ctx := context.Background()
 		replicate := replicate{
 			RWMutex:                sync.RWMutex{},
 			next:                   next,
 			name:                   "test-replicate",
 			producer:               mockedProducer,
-			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
+			wPool:                  utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
 			maxProcessableBodySize: defaultMaxProcessableBodySize,
 			discardedRequests:      utils.NewSyncCounter(),
 			failedRequests:         utils.NewSyncCounter(),
@@ -128,187 +210,190 @@ func TestReplicate(t *testing.T) {
 		defer func() {
 			wg.Wait()
 			replicate.wPool.Stop()
-			assert.EqualValues(t, 1, replicate.failedRequests.Load())
+			assert.EqualValues(t, 0, replicate.failedRequests.Load())
 			assert.EqualValues(t, 0, replicate.discardedRequests.Load())
-			assert.EqualValues(t, 0, replicate.successfulRequests.Load())
+			assert.EqualValues(t, 1, replicate.successfulRequests.Load())
 		}()
 
+		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
+		request.Header = headersReq
 		recorder := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodGet, "/test", nil)
 		replicate.ServeHTTP(recorder, request)
 
-		assert.Equal(t, http.StatusOK, recorder.Code, "status code must be 200")
-		assert.Equal(t, "body", recorder.Body.String(), "response body is correct")
+		assert.Equal(t, http.StatusOK, recorder.Code, "status code was changed by the middleware")
+		assert.Equal(t, expectedBody, recorder.Body.String(), "response body was changed by the middleware")
+		assert.Len(t, recorder.Header(), 2, "length of headers was changed by the middleware")
+		assert.Equal(t, headersResp[contentTypeHeaderKey][0], recorder.Header().Get(contentTypeHeaderKey), "response header was changed by the middleware")
+		assert.Equal(t, headersResp[customHeaderKey][0], recorder.Header().Get(customHeaderKey), "response header was changed by the middleware")
 	})
-}
+	t.Run("skip response without required header", func(t *testing.T) {
+		URL := "/test"
+		method := http.MethodPost
+		expectedBody := `{"key": "value"}`
 
-func TestReplicate_skip_request(t *testing.T) {
-	URL := "/test"
-	method := http.MethodPost
-	expectedBody := `{"key": "value"}`
+		headersReq := make(map[string][]string, 2)
+		customHeaderKey := "X-Header"
+		headersReq[customHeaderKey] = []string{"header value"}
+		contentTypeHeaderKey := "Content-Type"
+		headersReq[contentTypeHeaderKey] = []string{"application/json"}
 
-	headersReq := make(map[string][]string, 2)
-	customHeaderKey := "X-Header"
-	headersReq[customHeaderKey] = []string{"header value"}
+		headersResp := make(map[string][]string, 2)
+		headersResp[customHeaderKey] = []string{"header value"}
 
-	headersResp := make(map[string][]string, 2)
-	headersResp[customHeaderKey] = []string{"header value"}
-	contentTypeHeaderKey := "Content-Type"
-	headersResp[contentTypeHeaderKey] = []string{"application/json"}
+		expectedEvent := producer.Event{
+			Method: method,
+			URL:    URL,
+			Host:   "example.com",
+			Client: "192.0.2.1",
+			Request: producer.Payload{
+				Body:    expectedBody,
+				Headers: headersReq,
+			},
+			Response: producer.Payload{
+				Body:    emptyJSONBody,
+				Headers: map[string][]string{},
+			},
+		}
 
-	expectedEvent := producer.Event{
-		Method: method,
-		URL:    URL,
-		Host:   "example.com",
-		Client: "192.0.2.1",
-		Request: producer.Payload{
-			Body:    emptyJSONBody,
-			Headers: map[string][]string{},
-		},
-		Response: producer.Payload{
-			Body:    expectedBody,
-			Headers: headersResp,
-		},
-	}
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body := r.Body
+			defer body.Close()
 
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body := r.Body
-		defer body.Close()
+			bytes, err := ioutil.ReadAll(body)
+			require.NoError(t, err)
+			assert.Equal(t, expectedBody, string(bytes), "request body was changed by the middleware")
 
-		bytes, err := ioutil.ReadAll(body)
-		require.NoError(t, err)
-		assert.Equal(t, expectedBody, string(bytes), "request body was changed by the middleware")
+			w.Header().Set(customHeaderKey, headersResp[customHeaderKey][0])
+			_, err = w.Write([]byte(expectedBody))
+			require.NoError(t, err)
+		})
 
-		w.Header().Set(contentTypeHeaderKey, headersResp[contentTypeHeaderKey][0])
-		w.Header().Set(customHeaderKey, headersResp[customHeaderKey][0])
-		_, err = w.Write([]byte(expectedBody))
-		require.NoError(t, err)
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		mockedProducer := MockEventProducer(func(event producer.Event) error {
+			require.NotEmpty(t, event.Time)
+			expectedEvent.Time = event.Time
+			require.Equal(t, expectedEvent, event)
+			wg.Done()
+			return nil
+		})
+
+		replicate := replicate{
+			RWMutex:                sync.RWMutex{},
+			next:                   next,
+			name:                   "test-replicate",
+			producer:               mockedProducer,
+			wPool:                  utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
+			maxProcessableBodySize: defaultMaxProcessableBodySize,
+			discardedRequests:      utils.NewSyncCounter(),
+			failedRequests:         utils.NewSyncCounter(),
+			successfulRequests:     utils.NewSyncCounter(),
+		}
+		replicate.wPool.Start()
+		defer func() {
+			wg.Wait()
+			replicate.wPool.Stop()
+			assert.EqualValues(t, 0, replicate.failedRequests.Load())
+			assert.EqualValues(t, 0, replicate.discardedRequests.Load())
+			assert.EqualValues(t, 1, replicate.successfulRequests.Load())
+		}()
+
+		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
+		request.Header = headersReq
+		recorder := httptest.NewRecorder()
+		replicate.ServeHTTP(recorder, request)
+
+		assert.Equal(t, http.StatusOK, recorder.Code, "status code was changed by the middleware")
+		assert.Equal(t, expectedBody, recorder.Body.String(), "response body was changed by the middleware")
+		assert.Len(t, recorder.Header(), 2, "length of headers was changed by the middleware")
+		assert.Equal(t, headersResp[customHeaderKey][0], recorder.Header().Get(customHeaderKey), "response header was changed by the middleware")
+		assert.Contains(t, recorder.Header().Get(contentTypeHeaderKey), "text/plain", "response header was changed by the middleware")
 	})
+	t.Run("process request with type application/x-www-form-urlencoded", func(t *testing.T) {
+		URL := "/test"
+		method := http.MethodPost
+		expectedBody := `{"key": "value"}`
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	mockedProducer := MockEventProducer(func(event producer.Event) error {
-		require.NotEmpty(t, event.Time)
-		expectedEvent.Time = event.Time
-		require.Equal(t, expectedEvent, event)
-		wg.Done()
-		return nil
+		customHeaderKey := "X-Header"
+		contentTypeHeaderKey := "Content-Type"
+		headersReq := make(map[string][]string, 2)
+		headersReq[customHeaderKey] = []string{"header value"}
+		headersReq[contentTypeHeaderKey] = []string{"application/x-www-form-urlencoded"}
+
+		headersResp := make(map[string][]string, 2)
+		headersResp[customHeaderKey] = []string{"header value"}
+		headersResp[contentTypeHeaderKey] = []string{"application/json"}
+
+		expectedEvent := producer.Event{
+			Method: method,
+			URL:    URL,
+			Host:   "example.com",
+			Client: "192.0.2.1",
+			Request: producer.Payload{
+				Body:    expectedBody,
+				Headers: headersReq,
+			},
+			Response: producer.Payload{
+				Body:    expectedBody,
+				Headers: headersResp,
+			},
+		}
+
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body := r.Body
+			defer body.Close()
+
+			bytes, err := ioutil.ReadAll(body)
+			require.NoError(t, err)
+			assert.Equal(t, expectedBody, string(bytes), "request body was changed by the middleware")
+
+			w.Header().Set(customHeaderKey, headersResp[customHeaderKey][0])
+			w.Header().Set(contentTypeHeaderKey, headersResp[contentTypeHeaderKey][0])
+			_, err = w.Write([]byte(expectedBody))
+			require.NoError(t, err)
+		})
+
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		mockedProducer := MockEventProducer(func(event producer.Event) error {
+			assert.NotEmpty(t, event.Time)
+			expectedEvent.Time = event.Time
+			assert.Equal(t, expectedEvent, event)
+			wg.Done()
+			return nil
+		})
+
+		replicate := replicate{
+			RWMutex:                sync.RWMutex{},
+			next:                   next,
+			name:                   "test-replicate",
+			producer:               mockedProducer,
+			wPool:                  utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
+			maxProcessableBodySize: defaultMaxProcessableBodySize,
+			discardedRequests:      utils.NewSyncCounter(),
+			failedRequests:         utils.NewSyncCounter(),
+			successfulRequests:     utils.NewSyncCounter(),
+		}
+		replicate.wPool.Start()
+		defer func() {
+			wg.Wait()
+			replicate.wPool.Stop()
+			assert.EqualValues(t, 0, replicate.failedRequests.Load())
+			assert.EqualValues(t, 0, replicate.discardedRequests.Load())
+			assert.EqualValues(t, 1, replicate.successfulRequests.Load())
+		}()
+
+		request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
+		request.Header = headersReq
+		recorder := httptest.NewRecorder()
+		replicate.ServeHTTP(recorder, request)
+
+		assert.Equal(t, http.StatusOK, recorder.Code, "status code was changed by the middleware")
+		assert.Equal(t, expectedBody, recorder.Body.String(), "response body was changed by the middleware")
+		assert.Len(t, recorder.Header(), 2, "length of headers was changed by the middleware")
+		assert.Equal(t, headersResp[customHeaderKey][0], recorder.Header().Get(customHeaderKey), "response header was changed by the middleware")
+		assert.Contains(t, recorder.Header().Get(contentTypeHeaderKey), "application/json", "response header was changed by the middleware")
 	})
-
-	replicate := replicate{
-		RWMutex:                sync.RWMutex{},
-		next:                   next,
-		name:                   "test-replicate",
-		producer:               mockedProducer,
-		wPool:                  utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
-		maxProcessableBodySize: defaultMaxProcessableBodySize,
-		discardedRequests:      utils.NewSyncCounter(),
-		failedRequests:         utils.NewSyncCounter(),
-		successfulRequests:     utils.NewSyncCounter(),
-	}
-	replicate.wPool.Start()
-	defer func() {
-		wg.Wait()
-		replicate.wPool.Stop()
-		assert.EqualValues(t, 0, replicate.failedRequests.Load())
-		assert.EqualValues(t, 0, replicate.discardedRequests.Load())
-		assert.EqualValues(t, 1, replicate.successfulRequests.Load())
-	}()
-
-	request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
-	request.Header = headersReq
-	recorder := httptest.NewRecorder()
-	replicate.ServeHTTP(recorder, request)
-
-	assert.Equal(t, http.StatusOK, recorder.Code, "status code was changed by the middleware")
-	assert.Equal(t, expectedBody, recorder.Body.String(), "response body was changed by the middleware")
-	assert.Len(t, recorder.Header(), 2, "length of headers was changed by the middleware")
-	assert.Equal(t, headersResp[contentTypeHeaderKey][0], recorder.Header().Get(contentTypeHeaderKey), "response header was changed by the middleware")
-	assert.Equal(t, headersResp[customHeaderKey][0], recorder.Header().Get(customHeaderKey), "response header was changed by the middleware")
-}
-
-func TestReplicate_skip_response(t *testing.T) {
-	URL := "/test"
-	method := http.MethodPost
-	expectedBody := `{"key": "value"}`
-
-	headersReq := make(map[string][]string, 2)
-	customHeaderKey := "X-Header"
-	headersReq[customHeaderKey] = []string{"header value"}
-	contentTypeHeaderKey := "Content-Type"
-	headersReq[contentTypeHeaderKey] = []string{"application/json"}
-
-	headersResp := make(map[string][]string, 2)
-	headersResp[customHeaderKey] = []string{"header value"}
-
-	expectedEvent := producer.Event{
-		Method: method,
-		URL:    URL,
-		Host:   "example.com",
-		Client: "192.0.2.1",
-		Request: producer.Payload{
-			Body:    expectedBody,
-			Headers: headersReq,
-		},
-		Response: producer.Payload{
-			Body:    emptyJSONBody,
-			Headers: map[string][]string{},
-		},
-	}
-
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body := r.Body
-		defer body.Close()
-
-		bytes, err := ioutil.ReadAll(body)
-		require.NoError(t, err)
-		assert.Equal(t, expectedBody, string(bytes), "request body was changed by the middleware")
-
-		w.Header().Set(customHeaderKey, headersResp[customHeaderKey][0])
-		_, err = w.Write([]byte(expectedBody))
-		require.NoError(t, err)
-	})
-
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	mockedProducer := MockEventProducer(func(event producer.Event) error {
-		require.NotEmpty(t, event.Time)
-		expectedEvent.Time = event.Time
-		require.Equal(t, expectedEvent, event)
-		wg.Done()
-		return nil
-	})
-
-	replicate := replicate{
-		RWMutex:                sync.RWMutex{},
-		next:                   next,
-		name:                   "test-replicate",
-		producer:               mockedProducer,
-		wPool:                  utils.NewLimitPool(context.Background(), utils.DefaultPoolSize),
-		maxProcessableBodySize: defaultMaxProcessableBodySize,
-		discardedRequests:      utils.NewSyncCounter(),
-		failedRequests:         utils.NewSyncCounter(),
-		successfulRequests:     utils.NewSyncCounter(),
-	}
-	replicate.wPool.Start()
-	defer func() {
-		wg.Wait()
-		replicate.wPool.Stop()
-		assert.EqualValues(t, 0, replicate.failedRequests.Load())
-		assert.EqualValues(t, 0, replicate.discardedRequests.Load())
-		assert.EqualValues(t, 1, replicate.successfulRequests.Load())
-	}()
-
-	request := httptest.NewRequest(method, URL, strings.NewReader(expectedBody))
-	request.Header = headersReq
-	recorder := httptest.NewRecorder()
-	replicate.ServeHTTP(recorder, request)
-
-	assert.Equal(t, http.StatusOK, recorder.Code, "status code was changed by the middleware")
-	assert.Equal(t, expectedBody, recorder.Body.String(), "response body was changed by the middleware")
-	assert.Len(t, recorder.Header(), 2, "length of headers was changed by the middleware")
-	assert.Equal(t, headersResp[customHeaderKey][0], recorder.Header().Get(customHeaderKey), "response header was changed by the middleware")
-	assert.Contains(t, recorder.Header().Get(contentTypeHeaderKey), "text/plain", "response header was changed by the middleware")
 }
 
 func TestReplicate_too_long_body(t *testing.T) {

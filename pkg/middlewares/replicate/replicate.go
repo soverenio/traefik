@@ -78,8 +78,9 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	switch {
-	case !strings.Contains(req.Header.Get("Content-Type"), "application/json"):
-		logger.Debug("ignoring requests with header 'Content-Type' not 'application/json', setting Event.Request to '{}'")
+	case !isSupportedRequestFormat(req.Header.Get("Content-Type")):
+		logger.Debug("ignoring requests with header 'Content-Type' " +
+			"not 'application/json' or 'application/x-www-form-urlencoded', setting Event.Request to '{}'")
 	case req.ContentLength > int64(r.maxProcessableBodySize):
 		logger.Debugf("ignoring requests with too long body: body length is %d", req.ContentLength)
 		r.discardedRequests.Inc()
@@ -178,6 +179,21 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 		r.sendEvent(ctx, r.producer, ev, r.name)
 	})
+}
+
+func isSupportedRequestFormat(format string) bool {
+	supportedRequestFormat := []string{
+		"application/json",
+		"application/x-www-form-urlencoded",
+	}
+
+	format = strings.ToLower(format)
+	for _, supportedFormat := range supportedRequestFormat {
+		if strings.Contains(format, supportedFormat) {
+			return true
+		}
+	}
+	return false
 }
 
 // StartHeartbeat start regular message sending heartbeat message to kafka for  health checking.
