@@ -18,7 +18,50 @@ import (
 )
 
 func TestReplicate(t *testing.T) {
-	t.Run("The middleware doesn't affect on request and response", func(t *testing.T) {
+	t.Run("Producer error causes, but handler return 200", func(t *testing.T) {
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, err := w.Write([]byte("body"))
+			require.NoError(t, err)
+		})
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		mockedProducer := MockEventProducer(func(event producer.Event) error {
+			wg.Done()
+			return errors.New("test-error")
+		})
+
+		ctx := context.Background()
+		replicate := replicate{
+			RWMutex:                sync.RWMutex{},
+			next:                   next,
+			name:                   "test-replicate",
+			producer:               mockedProducer,
+			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
+			maxProcessableBodySize: defaultMaxProcessableBodySize,
+			discardedRequests:      utils.NewSyncCounter(),
+			failedRequests:         utils.NewSyncCounter(),
+			successfulRequests:     utils.NewSyncCounter(),
+		}
+		replicate.wPool.Start()
+		defer func() {
+			wg.Wait()
+			replicate.wPool.Stop()
+			assert.EqualValues(t, 1, replicate.failedRequests.Load())
+			assert.EqualValues(t, 0, replicate.discardedRequests.Load())
+			assert.EqualValues(t, 0, replicate.successfulRequests.Load())
+		}()
+
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/test", nil)
+		replicate.ServeHTTP(recorder, request)
+
+		assert.Equal(t, http.StatusOK, recorder.Code, "status code must be 200")
+		assert.Equal(t, "body", recorder.Body.String(), "response body is correct")
+	})
+}
+
+func TestReplicate_content_type_header(t *testing.T) {
+	t.Run("process request and response with types application/json", func(t *testing.T) {
 		URL := "/test"
 		method := http.MethodPost
 		expectedBody := `{"key": "value"}`
@@ -99,50 +142,6 @@ func TestReplicate(t *testing.T) {
 		assert.Equal(t, headers[customHeaderKey][0], recorder.Header().Get(customHeaderKey), "response header was changed by the middleware")
 		assert.Equal(t, headers[contentTypeHeaderKey][0], recorder.Header().Get(contentTypeHeaderKey), "response header was changed by the middleware")
 	})
-
-	t.Run("Producer error causes, but handler return 200", func(t *testing.T) {
-		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, err := w.Write([]byte("body"))
-			require.NoError(t, err)
-		})
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		mockedProducer := MockEventProducer(func(event producer.Event) error {
-			wg.Done()
-			return errors.New("test-error")
-		})
-
-		ctx := context.Background()
-		replicate := replicate{
-			RWMutex:                sync.RWMutex{},
-			next:                   next,
-			name:                   "test-replicate",
-			producer:               mockedProducer,
-			wPool:                  utils.NewLimitPool(ctx, utils.DefaultPoolSize),
-			maxProcessableBodySize: defaultMaxProcessableBodySize,
-			discardedRequests:      utils.NewSyncCounter(),
-			failedRequests:         utils.NewSyncCounter(),
-			successfulRequests:     utils.NewSyncCounter(),
-		}
-		replicate.wPool.Start()
-		defer func() {
-			wg.Wait()
-			replicate.wPool.Stop()
-			assert.EqualValues(t, 1, replicate.failedRequests.Load())
-			assert.EqualValues(t, 0, replicate.discardedRequests.Load())
-			assert.EqualValues(t, 0, replicate.successfulRequests.Load())
-		}()
-
-		recorder := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodGet, "/test", nil)
-		replicate.ServeHTTP(recorder, request)
-
-		assert.Equal(t, http.StatusOK, recorder.Code, "status code must be 200")
-		assert.Equal(t, "body", recorder.Body.String(), "response body is correct")
-	})
-}
-
-func TestReplicate_content_type_header(t *testing.T) {
 	t.Run("skip request without required header", func(t *testing.T) {
 		URL := "/test"
 		method := http.MethodPost
