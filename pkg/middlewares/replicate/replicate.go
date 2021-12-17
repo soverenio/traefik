@@ -44,10 +44,10 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 	ctx = middlewares.GetLoggerCtx(ctx, middlewareName, middlewareType)
 	logger := log.FromContext(ctx)
 
-	logger.Debugf("creating middleware %v", middlewareName)
+	logger.Infof("creating middleware %v", middlewareName)
 	maxProcessableBodySize := config.Replicate.MaxProcessableBodySize
 	if maxProcessableBodySize <= 0 {
-		logger.Debugf("maxProcessableBodySize from config equals zero or less, use default value: %d", defaultMaxProcessableBodySize)
+		logger.Warnf("maxProcessableBodySize from config equals zero or less, use default value: %d", defaultMaxProcessableBodySize)
 		maxProcessableBodySize = defaultMaxProcessableBodySize
 	}
 
@@ -62,7 +62,7 @@ func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo,
 		successfulRequests:     utils.NewSyncCounter(),
 	}
 	replicate.wPool.Start()
-	logger.Debug("worker pool started")
+	logger.Info("worker pool started")
 
 	go replicate.connectProducer(ctx, config, middlewareName, next)
 	return replicate
@@ -79,10 +79,10 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	switch {
 	case !isSupportedRequestFormat(req.Header.Get("Content-Type")):
-		logger.Debug("ignoring requests with header 'Content-Type' " +
+		logger.Warn("ignoring requests with header 'Content-Type' " +
 			"not 'application/json' or 'application/x-www-form-urlencoded', setting Event.Request to '{}'")
 	case req.ContentLength > int64(r.maxProcessableBodySize):
-		logger.Debugf("ignoring requests with too long body: body length is %d", req.ContentLength)
+		logger.Warnf("ignoring requests with too long body: body length is %d", req.ContentLength)
 		r.discardedRequests.Inc()
 		r.next.ServeHTTP(rw, req)
 		return
@@ -93,7 +93,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		requestBody, err := ioutil.ReadAll(body)
 		if err != nil {
 			msg := fmt.Sprintf("error reading request body: %e", err)
-			logger.Debug(msg)
+			logger.Error(msg)
 			r.failedRequests.Inc()
 			http.Error(rw, msg, http.StatusInternalServerError)
 			return
@@ -123,7 +123,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	_, err = rw.Write(responseBody)
 	if err != nil {
 		msg := fmt.Sprintf("failed to write response body: %e", err)
-		logger.Debugf(msg)
+		logger.Errorf(msg)
 		r.failedRequests.Inc()
 		http.Error(rw, msg, http.StatusInternalServerError)
 		return
@@ -136,7 +136,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			Headers: responseHeaders,
 		}
 	} else {
-		logger.Debug("ignoring responses with header 'Content-Type' not 'application/json', setting Event.Response to '{}'")
+		logger.Warn("ignoring responses with header 'Content-Type' not 'application/json', setting Event.Response to '{}'")
 		eventResponse = producer.Payload{
 			Body:    emptyJSONBody,
 			Headers: map[string][]string{},
@@ -145,7 +145,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	size := len(eventRequest.Body) + len(eventResponse.Body)
 	if size > r.maxProcessableBodySize {
-		logger.Debugf("ignoring request and response with too long body: total length is %d", size)
+		logger.Warnf("ignoring request and response with too long body: total length is %d", size)
 		r.discardedRequests.Inc()
 		return
 	}
@@ -239,7 +239,7 @@ func (r *replicate) sendEvent(ctx context.Context, producer producer.Producer, e
 
 func (r *replicate) sendHeartbeat(ctx context.Context, p producer.Producer, name string, duration time.Duration) {
 	logger := log.FromContext(ctx)
-	logger.Debug("Initial sending heartbeat messages")
+	logger.Info("Initial sending heartbeat messages")
 
 	ticker := time.NewTicker(duration)
 	defer ticker.Stop()
@@ -247,7 +247,7 @@ func (r *replicate) sendHeartbeat(ctx context.Context, p producer.Producer, name
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Debug("stop sending heartbeat messages")
+			logger.Info("stop sending heartbeat messages")
 			return
 		case <-ticker.C:
 			hostname, err := os.Hostname()
