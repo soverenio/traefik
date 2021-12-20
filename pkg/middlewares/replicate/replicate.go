@@ -144,7 +144,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	size := len(eventRequest.Body) + len(eventResponse.Body)
 	if size > r.maxProcessableBodySize {
-		logger.Warnf("ignoring request and response with too long body: total length is %d", size)
+		logger.Infof("ignoring request and response with too long body: total length is %d", size)
 		r.discardedRequests.Inc()
 		return
 	}
