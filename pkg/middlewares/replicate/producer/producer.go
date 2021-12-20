@@ -90,7 +90,7 @@ func (p *KafkaPublisher) Connect(ctx context.Context) {
 		default:
 			publisher, err := kafka.NewPublisher(config, &watermillLogger{Log: logger.WithField("service", "watermill")})
 			if err == nil {
-				logger.Debug("kafka publisher created")
+				logger.Info("kafka publisher created")
 				p.Publisher = publisher
 				return
 			}
