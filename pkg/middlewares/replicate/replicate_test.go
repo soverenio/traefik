@@ -625,6 +625,7 @@ func TestHeartbeat(t *testing.T) {
 			assert.EqualValues(t, expectedPoolDiscarded+expectedDiscarded, heartbeat.Discarded)
 			assert.EqualValues(t, expectedFailed, heartbeat.Failed)
 			assert.EqualValues(t, expectedSuccessful, heartbeat.Successful)
+			assert.NotEmpty(t, heartbeat.BuildVersion)
 			calls++
 			return nil
 		})
