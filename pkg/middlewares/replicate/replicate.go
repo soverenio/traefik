@@ -3,8 +3,9 @@ package replicate
 import (
 	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -15,136 +16,229 @@ import (
 	"github.com/traefik/traefik/v2/pkg/log"
 	"github.com/traefik/traefik/v2/pkg/middlewares"
 	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/producer"
+	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/utils"
 	"github.com/traefik/traefik/v2/pkg/safe"
 )
 
 const (
-	typeName = "Replicate"
+	middlewareType                = "Replicate"
+	emptyJSONBody                 = "{}"
+	defaultMaxProcessableBodySize = 1000000
 )
 
 // replicate is a middleware used to send copies of requests and responses to an arbitrary service.
 type replicate struct {
 	sync.RWMutex
-	next     http.Handler
-	name     string
-	producer producer.Producer
-	wPool    *wPool
+	next                   http.Handler
+	name                   string
+	producer               producer.Producer
+	wPool                  *utils.WorkerPool
+	maxProcessableBodySize int
+	discardedRequests      utils.SyncCounter
+	failedRequests         utils.SyncCounter
+	successfulRequests     utils.SyncCounter
 }
 
 // New creates a new http handler.
 func New(ctx context.Context, next http.Handler, config *runtime.MiddlewareInfo, middlewareName string) http.Handler {
-	log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).Debug("Creating middleware")
+	ctx = middlewares.GetLoggerCtx(ctx, middlewareName, middlewareType)
+	logger := log.FromContext(ctx)
+
+	logger.Infof("creating middleware %v", middlewareName)
+	maxProcessableBodySize := config.Replicate.MaxProcessableBodySize
+	if maxProcessableBodySize <= 0 {
+		logger.Warnf("maxProcessableBodySize from config equals zero or less, use default value: %d", defaultMaxProcessableBodySize)
+		maxProcessableBodySize = defaultMaxProcessableBodySize
+	}
 
 	replicate := &replicate{
-		next:     next,
-		name:     middlewareName,
-		producer: nil,
-		wPool:    newLimitPool(ctx, config.Replicate.WorkerPoolSize),
+		next:                   next,
+		name:                   middlewareName,
+		producer:               nil,
+		wPool:                  utils.NewLimitPool(ctx, config.Replicate.WorkerPoolSize),
+		maxProcessableBodySize: maxProcessableBodySize,
+		discardedRequests:      utils.NewSyncCounter(),
+		failedRequests:         utils.NewSyncCounter(),
+		successfulRequests:     utils.NewSyncCounter(),
 	}
 	replicate.wPool.Start()
+	logger.Info("worker pool started")
 
 	go replicate.connectProducer(ctx, config, middlewareName, next)
 	return replicate
 }
 
 func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	ctx := context.Background()
-	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, r.name, typeName))
+	ctx := middlewares.GetLoggerCtx(context.Background(), r.name, middlewareType)
+	logger := log.FromContext(ctx)
 
-	body := req.Body
-	defer body.Close()
+	eventRequest := producer.Payload{
+		Body:    emptyJSONBody,
+		Headers: map[string][]string{},
+	}
+
+	switch {
+	case !isSupportedRequestFormat(req.Header.Get("Content-Type")):
+		logger.Info("unsupported request Content-Type, setting Event.Request to '{}'")
+	case req.ContentLength > int64(r.maxProcessableBodySize):
+		logger.Infof("ignoring requests with too long body: body length is %d", req.ContentLength)
+		r.discardedRequests.Inc()
+		r.next.ServeHTTP(rw, req)
+		return
+	default:
+		body := req.Body
+		defer body.Close()
+
+		requestBody, err := ioutil.ReadAll(body)
+		if err != nil {
+			msg := fmt.Sprintf("error reading request body: %e", err)
+			logger.Error(msg)
+			r.failedRequests.Inc()
+			http.Error(rw, msg, http.StatusInternalServerError)
+			return
+		}
+		req.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
+
+		eventRequest.Body = string(requestBody)
+		eventRequest.Headers = req.Header
+	}
 
 	method := req.Method
 	URL := req.URL.String()
 	host := req.Host
-	remoteAddr := req.RemoteAddr
-	requestHeaders := req.Header
 
-	requestBody, err := ioutil.ReadAll(body)
+	remoteAddr, _, err := net.SplitHostPort(req.RemoteAddr)
 	if err != nil {
-		logger.Debug(err)
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
-		return
+		logger.Warnf("invalid remote address: %s: %v", req.RemoteAddr, err)
+		remoteAddr = req.RemoteAddr
 	}
-	req.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
 
 	recorder := newResponseRecorder(rw)
 	r.next.ServeHTTP(recorder, req)
 	responseBody := recorder.GetBody().Bytes()
 	responseHeaders := recorder.Header()
+	responseCode := recorder.GetStatusCode()
 
 	_, err = rw.Write(responseBody)
 	if err != nil {
-		logger.Debug(err)
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		msg := fmt.Sprintf("failed to write response body: %e", err)
+		logger.Errorf(msg)
+		r.failedRequests.Inc()
+		http.Error(rw, msg, http.StatusInternalServerError)
 		return
 	}
-	r.RWMutex.RLock()
-	defer r.RWMutex.RUnlock()
-	if r.producer == nil {
-		logger.Warn("Connect to kafka failed")
+
+	var eventResponse producer.Payload
+	if ct := responseHeaders.Get("Content-Type"); strings.Contains(ct, "application/json") {
+		eventResponse = producer.Payload{
+			Body:    string(responseBody),
+			Headers: responseHeaders,
+		}
+	} else {
+		logger.Info("unsupported response Content-Type, setting Event.Response to '{}'")
+		eventResponse = producer.Payload{
+			Body:    emptyJSONBody,
+			Headers: map[string][]string{},
+		}
+	}
+
+	size := len(eventRequest.Body) + len(eventResponse.Body)
+	if size > r.maxProcessableBodySize {
+		logger.Infof("ignoring request and response with too long body: total length is %d", size)
+		r.discardedRequests.Inc()
 		return
 	}
 
 	r.wPool.Do(func() {
-		sendEvent(ctx, r.producer, producer.Event{
-			Method: method,
-			URL:    URL,
-			Host:   host,
-			Client: remoteAddr,
-			Request: producer.Payload{
-				Body:    string(requestBody),
-				Headers: requestHeaders,
-			},
-			Response: producer.Payload{
-				Body:    string(responseBody),
-				Headers: responseHeaders,
-			},
-			Time: time.Now().UTC(),
-		}, r.name)
+		r.RWMutex.RLock()
+		producerInstance := r.producer
+		r.RWMutex.RUnlock()
+
+		if producerInstance == nil {
+			logger.Warn("has not yet connected to producer (or failed to connect)")
+			r.discardedRequests.Inc()
+			return
+		}
+
+		ev := producer.Event{
+			Method:       method,
+			URL:          URL,
+			Host:         host,
+			Client:       remoteAddr,
+			Request:      eventRequest,
+			Response:     eventResponse,
+			ResponseCode: responseCode,
+			Time:         time.Now().UTC(),
+		}
+
+		if !isVerifyEvent(ev) {
+			r.discardedRequests.Inc()
+			return
+		}
+
+		r.sendEvent(ctx, r.producer, ev, r.name)
 	})
 }
 
-// StartAlive start regular message sending alive message to kafka for  health checking.
-func StartAlive(ctx context.Context, producer producer.Producer, name string, topic string, duration time.Duration) error {
-	if topic == "" {
-		return errors.New("topic is required")
+func isSupportedRequestFormat(format string) bool {
+	supportedRequestFormat := []string{
+		"application/json",
+		"application/x-www-form-urlencoded",
 	}
+
+	format = strings.ToLower(format)
+	for _, supportedFormat := range supportedRequestFormat {
+		if strings.Contains(format, supportedFormat) {
+			return true
+		}
+	}
+	return false
+}
+
+// StartHeartbeat start regular message sending heartbeat message to kafka for  health checking.
+func (r *replicate) StartHeartbeat(ctx context.Context, producer producer.Producer, name string, duration time.Duration) error {
+	ctx = log.With(ctx, log.Str("component", "heartbeat"))
 	safe.Go(func() {
-		sendAlive(ctx, producer, name, topic, duration)
+		r.sendHeartbeat(ctx, producer, name, duration)
 	})
 	return nil
 }
 
 func (r *replicate) connectProducer(ctx context.Context, config *runtime.MiddlewareInfo, middlewareName string, next http.Handler) {
-	producer, err := producer.NewKafkaPublisher(config.Replicate.Topic, config.Replicate.Brokers)
+	logger := log.FromContext(ctx)
+
+	producerInstance, err := producer.NewKafkaPublisher(config.Replicate.Topic, config.Replicate.HeartbeatTopic, config.Replicate.Brokers)
 	if err != nil {
-		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
-			Fatal(strings.Join([]string{"Replicate: failed to create a producer", err.Error()}, ": "))
+		logger.Fatalf("failed to create a producer: %v", err)
 		return
 	}
-	producer.Connect(ctx)
+	producerInstance.Connect(ctx)
+
 	r.RWMutex.Lock()
-	r.producer = producer
+	r.producer = producerInstance
 	r.RWMutex.Unlock()
-	err = StartAlive(ctx, r.producer, middlewareName, config.Replicate.AliveTopic, time.Second*10)
+
+	err = r.StartHeartbeat(ctx, r.producer, middlewareName, time.Second*10)
 	if err != nil {
-		log.FromContext(middlewares.GetLoggerCtx(ctx, middlewareName, typeName)).
-			Warn(strings.Join([]string{"Replicate: failed to start sending alive messages", err.Error()}, ": "))
+		logger.Warnf("failed to start sending heartbeat messages: %v", err)
 	}
 }
 
-func sendEvent(ctx context.Context, producer producer.Producer, event producer.Event, name string) {
-	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
-	err := producer.Produce(event)
-	if err != nil {
-		logger.Error(err)
+func (r *replicate) sendEvent(ctx context.Context, producer producer.Producer, event producer.Event, name string) {
+	logger := log.FromContext(ctx)
+	err := r.producer.ProduceEvent(event)
+	switch {
+	case err != nil:
+		logger.Warnf("error sending event message to kafka: %v", err)
+		r.failedRequests.Inc()
+	default:
+		r.successfulRequests.Inc()
 	}
 }
 
-func sendAlive(ctx context.Context, p producer.Producer, name string, topic string, duration time.Duration) {
-	logger := log.FromContext(middlewares.GetLoggerCtx(ctx, name, typeName))
-	logger.Debug("Initial sending alive messages")
+func (r *replicate) sendHeartbeat(ctx context.Context, p producer.Producer, name string, duration time.Duration) {
+	logger := log.FromContext(ctx)
+	logger.Info("Initial sending heartbeat messages")
 
 	ticker := time.NewTicker(duration)
 	defer ticker.Stop()
@@ -152,20 +246,34 @@ func sendAlive(ctx context.Context, p producer.Producer, name string, topic stri
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Debug("Stopping sending alive messages")
+			logger.Info("stop sending heartbeat messages")
 			return
 		case <-ticker.C:
 			hostname, err := os.Hostname()
 			if err != nil {
-				logger.Debug(err)
+				logger.Warnf("failed to resolve hostname: %v", err)
 			}
-			err = p.ProduceTo(producer.Event{
-				Host: hostname,
-				Time: time.Now().UTC(),
-			}, topic)
+			discarded := r.discardedRequests.Load()
+			poolDiscarded := r.wPool.LoadDiscarded()
+			heartbeat := producer.Heartbeat{
+				Host:       hostname,
+				Time:       time.Now().UTC(),
+				Discarded:  discarded + poolDiscarded,
+				Failed:     r.failedRequests.Load(),
+				Successful: r.successfulRequests.Load(),
+			}
+			err = p.ProduceHeartbeat(heartbeat)
 			if err != nil {
-				logger.Debug(err)
+				logger.Warnf("failed to send message: %v", err)
+				r.wPool.AddDiscarded(poolDiscarded)
+				r.discardedRequests.Add(discarded)
+				r.failedRequests.Add(heartbeat.Failed)
+				r.successfulRequests.Add(heartbeat.Successful)
 			}
 		}
 	}
+}
+
+func isVerifyEvent(ev producer.Event) bool {
+	return ev.Host != "" && ev.Client != ""
 }
