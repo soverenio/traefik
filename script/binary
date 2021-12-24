@@ -14,8 +14,12 @@ if [ -n "$VERBOSE" ]; then
 fi
 
 if [ -z "$VERSION" ]; then
-    VERSION=$(git describe --tags)
+    VERSION=$(git describe --tags 2>/dev/null)
 fi
+
+if [ -z "$VERSION" ]; then
+    VERSION=$(git rev-parse --short HEAD)
+endif
 
 if [ -z "$CODENAME" ]; then
     CODENAME=cheddar
