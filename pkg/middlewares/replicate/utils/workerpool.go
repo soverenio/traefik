@@ -24,17 +24,17 @@ func (p *WorkerPool) workerLoop(ctx context.Context) {
 	defer p.workerWaitGroup.Done()
 	queue := p.jobs.ReadQueue()
 	logger := log.FromContext(ctx)
-	logger.Debug("worker started")
+	logger.Info("worker started")
 
 	if queue == nil { // that means channel was closed, stopping processing messages
-		logger.Debug("stopping worker")
+		logger.Info("stopping worker")
 		return
 	}
 
 	for {
 		jobFunc, ok := <-queue
 		if !ok { // that means channel is closed, stopping processing messages
-			logger.Debug("stopping worker")
+			logger.Info("stopping worker")
 			return
 		}
 		jobFunc()
@@ -48,7 +48,7 @@ func NewLimitPool(parentCtx context.Context, poolSize int) *WorkerPool {
 	logger := log.FromContext(ctx)
 
 	if poolSize == 0 {
-		logger.Debugf("poolSize equal zero from config, use default pool size %d", DefaultPoolSize)
+		logger.Warnf("poolSize equal zero from config, use default pool size %d", DefaultPoolSize)
 		poolSize = DefaultPoolSize
 	}
 
