@@ -26,11 +26,12 @@ type Event struct {
 
 // Heartbeat is message with info about replicate middleware status. This message send to kafka.
 type Heartbeat struct {
-	Host       string    `json:"host"`
-	Time       time.Time `json:"time"`
-	Discarded  uint64    `json:"discarded"`
-	Failed     uint64    `json:"failed"`
-	Successful uint64    `json:"successful"`
+	Host         string    `json:"host"`
+	Time         time.Time `json:"time"`
+	Discarded    uint64    `json:"discarded"`
+	Failed       uint64    `json:"failed"`
+	Successful   uint64    `json:"successful"`
+	BuildVersion string    `json:"build_version"`
 }
 
 // Payload body and headers of  request and response.

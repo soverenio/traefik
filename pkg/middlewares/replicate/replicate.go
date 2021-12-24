@@ -18,6 +18,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/producer"
 	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/utils"
 	"github.com/traefik/traefik/v2/pkg/safe"
+	"github.com/traefik/traefik/v2/pkg/version"
 )
 
 const (
@@ -256,11 +257,12 @@ func (r *replicate) sendHeartbeat(ctx context.Context, p producer.Producer, name
 			discarded := r.discardedRequests.Load()
 			poolDiscarded := r.wPool.LoadDiscarded()
 			heartbeat := producer.Heartbeat{
-				Host:       hostname,
-				Time:       time.Now().UTC(),
-				Discarded:  discarded + poolDiscarded,
-				Failed:     r.failedRequests.Load(),
-				Successful: r.successfulRequests.Load(),
+				Host:         hostname,
+				Time:         time.Now().UTC(),
+				Discarded:    discarded + poolDiscarded,
+				Failed:       r.failedRequests.Load(),
+				Successful:   r.successfulRequests.Load(),
+				BuildVersion: version.Version,
 			}
 			err = p.ProduceHeartbeat(heartbeat)
 			if err != nil {
