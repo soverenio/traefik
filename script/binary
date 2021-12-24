@@ -19,7 +19,7 @@ fi
 
 if [ -z "$VERSION" ]; then
     VERSION=$(git rev-parse --short HEAD)
-endif
+fi
 
 if [ -z "$CODENAME" ]; then
     CODENAME=cheddar
