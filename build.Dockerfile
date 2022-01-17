@@ -24,8 +24,9 @@ RUN curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.s
 # Download misspell binary to bin folder in $GOPATH
 RUN  curl -sfL https://raw.githubusercontent.com/client9/misspell/master/install-misspell.sh | bash -s -- -b $GOPATH/bin v0.3.4
 
-# Download goreleaser binary to bin folder in $GOPATH
-RUN curl -sfL https://install.goreleaser.com/github.com/goreleaser/goreleaser.sh | sh
+# Install goreleaser
+RUN wget https://github.com/goreleaser/goreleaser/releases/download/v1.3.1/goreleaser_1.3.1_x86_64.apk
+RUN apk add --allow-untrusted goreleaser_1.3.1_x86_64.apk
 
 WORKDIR /go/src/github.com/traefik/traefik
 
