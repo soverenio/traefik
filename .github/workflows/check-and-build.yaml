@@ -75,7 +75,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          docker push -a "${IMAGE_NAME}" | awk '/digest/ {print $3}'
+          docker push -a "${IMAGE_NAME}"
 
   notify:
     needs: build-push
