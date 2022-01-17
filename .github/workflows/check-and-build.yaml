@@ -75,8 +75,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          DIGEST=$(docker push -a "${IMAGE_NAME}" | awk '/digest/ {print $3}')
-          echo "DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
+          docker push -a "${IMAGE_NAME}"
 
   notify:
     needs: build-push
