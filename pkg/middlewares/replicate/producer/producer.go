@@ -9,7 +9,6 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
-
 	"github.com/traefik/traefik/v2/pkg/log"
 )
 
