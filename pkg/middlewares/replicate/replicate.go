@@ -23,9 +23,10 @@ import (
 
 const (
 	middlewareType                = "Replicate"
-	emptyJSONBody                 = "{}"
 	defaultMaxProcessableBodySize = 1000000
 )
+
+var emptyJSONBody = []byte("{}")
 
 // replicate is a middleware used to send copies of requests and responses to an arbitrary service.
 type replicate struct {
@@ -100,7 +101,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		}
 		req.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
 
-		eventRequest.Body = string(requestBody)
+		eventRequest.Body = requestBody
 		eventRequest.Headers = req.Header
 	}
 
@@ -132,7 +133,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	var eventResponse producer.Payload
 	if ct := responseHeaders.Get("Content-Type"); strings.Contains(ct, "application/json") {
 		eventResponse = producer.Payload{
-			Body:    string(responseBody),
+			Body:    responseBody,
 			Headers: responseHeaders,
 		}
 	} else {

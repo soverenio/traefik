@@ -9,6 +9,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
+
 	"github.com/traefik/traefik/v2/pkg/log"
 )
 
@@ -36,7 +37,7 @@ type Heartbeat struct {
 
 // Payload body and headers of  request and response.
 type Payload struct {
-	Body    string              `json:"body"`
+	Body    []byte              `json:"body"`
 	Headers map[string][]string `json:"headers"`
 }
 
