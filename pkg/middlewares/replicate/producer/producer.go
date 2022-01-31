@@ -36,7 +36,7 @@ type Heartbeat struct {
 
 // Payload body and headers of  request and response.
 type Payload struct {
-	Body    string              `json:"body"`
+	Body    []byte              `json:"body"`
 	Headers map[string][]string `json:"headers"`
 }
 
