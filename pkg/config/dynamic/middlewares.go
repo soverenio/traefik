@@ -4,7 +4,6 @@ import (
 	"time"
 
 	ptypes "github.com/traefik/paerser/types"
-
 	"github.com/traefik/traefik/v2/pkg/ip"
 	"github.com/traefik/traefik/v2/pkg/types"
 )
