@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/producer"
 	"github.com/traefik/traefik/v2/pkg/middlewares/replicate/utils"
 )
@@ -22,7 +21,7 @@ func TestReplicate(t *testing.T) {
 	t.Run("Producer error causes, but handler return 200", func(t *testing.T) {
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte("body"))
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		})
 		wg := sync.WaitGroup{}
 		wg.Add(1)
@@ -93,13 +92,13 @@ func TestReplicate_content_type_header(t *testing.T) {
 			defer body.Close()
 
 			bytes, err := ioutil.ReadAll(body)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, expectedBody, bytes, "request body was changed by the middleware")
 
 			w.Header().Set(customHeaderKey, headers[customHeaderKey][0])
 			w.Header().Set(contentTypeHeaderKey, headers[contentTypeHeaderKey][0])
 			_, err = w.Write(expectedBody)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		})
 
 		wg := sync.WaitGroup{}
@@ -164,7 +163,7 @@ func TestReplicate_content_type_header(t *testing.T) {
 			Client: "192.0.2.1",
 			Request: producer.Payload{
 				Body:    emptyJSONBody,
-				Headers: map[string][]string{},
+				Headers: headersReq,
 			},
 			Response: producer.Payload{
 				Body:    expectedBody,
@@ -177,21 +176,21 @@ func TestReplicate_content_type_header(t *testing.T) {
 			defer body.Close()
 
 			bytes, err := ioutil.ReadAll(body)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, expectedBody, bytes, "request body was changed by the middleware")
 
 			w.Header().Set(contentTypeHeaderKey, headersResp[contentTypeHeaderKey][0])
 			w.Header().Set(customHeaderKey, headersResp[customHeaderKey][0])
 			_, err = w.Write(expectedBody)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		})
 
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 		mockedProducer := MockEventProducer(func(event producer.Event) error {
-			require.NotEmpty(t, event.Time)
+			assert.NotEmpty(t, event.Time)
 			expectedEvent.Time = event.Time
-			require.Equal(t, expectedEvent, event)
+			assert.Equal(t, expectedEvent, event)
 			wg.Done()
 			return nil
 		})
@@ -252,7 +251,7 @@ func TestReplicate_content_type_header(t *testing.T) {
 			},
 			Response: producer.Payload{
 				Body:    emptyJSONBody,
-				Headers: map[string][]string{},
+				Headers: headersResp,
 			},
 		}
 
@@ -261,20 +260,20 @@ func TestReplicate_content_type_header(t *testing.T) {
 			defer body.Close()
 
 			bytes, err := ioutil.ReadAll(body)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, expectedBody, bytes, "request body was changed by the middleware")
 
 			w.Header().Set(customHeaderKey, headersResp[customHeaderKey][0])
 			_, err = w.Write(expectedBody)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		})
 
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 		mockedProducer := MockEventProducer(func(event producer.Event) error {
-			require.NotEmpty(t, event.Time)
+			assert.NotEmpty(t, event.Time)
 			expectedEvent.Time = event.Time
-			require.Equal(t, expectedEvent, event)
+			assert.Equal(t, expectedEvent, event)
 			wg.Done()
 			return nil
 		})
@@ -345,13 +344,13 @@ func TestReplicate_content_type_header(t *testing.T) {
 			defer body.Close()
 
 			bytes, err := ioutil.ReadAll(body)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, expectedBody, bytes, "request body was changed by the middleware")
 
 			w.Header().Set(customHeaderKey, headersResp[customHeaderKey][0])
 			w.Header().Set(contentTypeHeaderKey, headersResp[contentTypeHeaderKey][0])
 			_, err = w.Write(expectedBody)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		})
 
 		wg := sync.WaitGroup{}
@@ -417,13 +416,13 @@ func TestReplicate_too_long_body(t *testing.T) {
 			defer body.Close()
 
 			bytes, err := ioutil.ReadAll(body)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, requestBody, bytes, "request body was changed by the middleware")
 
 			w.Header().Set(contentTypeHeaderKey, headers[contentTypeHeaderKey][0])
 			w.Header().Set(customHeaderKey, headers[customHeaderKey][0])
 			_, err = w.Write(expectedBody)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		})
 
 		mockedProducer := MockEventProducer(func(event producer.Event) error {
@@ -476,7 +475,7 @@ func TestReplicate_too_long_body(t *testing.T) {
 			w.Header().Set(contentTypeHeaderKey, headers[contentTypeHeaderKey][0])
 			w.Header().Set(customHeaderKey, headers[customHeaderKey][0])
 			_, err := w.Write([]byte(expectedBody))
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		})
 
 		mockedProducer := MockEventProducer(func(event producer.Event) error {
@@ -529,7 +528,7 @@ func TestReplicate_too_long_body(t *testing.T) {
 			w.Header().Set(contentTypeHeaderKey, headers[contentTypeHeaderKey][0])
 			w.Header().Set(customHeaderKey, headers[customHeaderKey][0])
 			_, err := w.Write([]byte(expectedBody))
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		})
 
 		mockedProducer := MockEventProducer(func(event producer.Event) error {
@@ -648,7 +647,7 @@ func TestHeartbeat(t *testing.T) {
 		replicate.successfulRequests.Add(expectedSuccessful)
 
 		err := replicate.StartHeartbeat(ctx, producer, "test-replicate", duration)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		time.Sleep(duration + time.Second)
 		assert.Equal(t, 1, calls)
 		cancel()
@@ -691,7 +690,7 @@ func TestHeartbeat(t *testing.T) {
 		replicate.successfulRequests.Add(expectedSuccessful)
 
 		err := replicate.StartHeartbeat(ctx, producer, "test-replicate", duration)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		time.Sleep(duration + time.Second)
 		assert.Equal(t, 1, calls)
 		cancel()
