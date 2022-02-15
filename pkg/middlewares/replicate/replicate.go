@@ -76,7 +76,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	eventRequest := producer.Payload{
 		Body:    emptyJSONBody,
-		Headers: map[string][]string{},
+		Headers: req.Header.Clone(),
 	}
 
 	switch {
@@ -102,7 +102,6 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		req.Body = ioutil.NopCloser(bytes.NewReader(requestBody))
 
 		eventRequest.Body = requestBody
-		eventRequest.Headers = req.Header
 	}
 
 	method := req.Method
@@ -118,7 +117,7 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	recorder := newResponseRecorder(rw)
 	r.next.ServeHTTP(recorder, req)
 	responseBody := recorder.GetBody().Bytes()
-	responseHeaders := recorder.Header()
+	responseHeaders := recorder.Header().Clone()
 	responseCode := recorder.GetStatusCode()
 
 	_, err = rw.Write(responseBody)
@@ -130,18 +129,15 @@ func (r *replicate) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var eventResponse producer.Payload
+	eventResponse := producer.Payload{
+		Body:    emptyJSONBody,
+		Headers: responseHeaders,
+	}
+
 	if ct := responseHeaders.Get("Content-Type"); strings.Contains(ct, "application/json") {
-		eventResponse = producer.Payload{
-			Body:    responseBody,
-			Headers: responseHeaders,
-		}
+		eventResponse.Body = responseBody
 	} else {
 		logger.Info("unsupported response Content-Type, setting Event.Response to '{}'")
-		eventResponse = producer.Payload{
-			Body:    emptyJSONBody,
-			Headers: map[string][]string{},
-		}
 	}
 
 	size := len(eventRequest.Body) + len(eventResponse.Body)
