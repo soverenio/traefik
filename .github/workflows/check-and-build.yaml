@@ -15,7 +15,7 @@ env:
 
 jobs:
   test-unit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     defaults:
       run:
@@ -42,8 +42,8 @@ jobs:
           key: ${{ runner.os }}-test-unit-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-test-unit-go-
 
-      - name: Installing dependencies
-        run: go install github.com/containous/go-bindata/go-bindata@v1.0.0
+      - name: Avoid generating webui
+        run: mkdir -p webui/static && touch webui/static/index.html
 
       - name: Tests
         run: make test-unit
