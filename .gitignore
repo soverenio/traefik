@@ -15,7 +15,8 @@
 *.log
 *.exe
 cover.out
-vendor/
+# Temporary keep vendor in repository
+# vendor/
 plugins-storage/
 plugins-local/
 traefik_changelog.md
